@@ -4,6 +4,7 @@ import {
 import { OrdersService, AuthUser } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { AppendItemsDto } from './dto/append-items.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -33,6 +34,16 @@ export class OrdersController {
     @Req() req: { user: AuthUser },
   ) {
     return this.orders.cancel(id, dto.reason, req.user);
+  }
+
+  @Post(':id/items')
+  @Roles('WAITER', 'CASHIER', 'MANAGER', 'ADMIN')
+  appendItems(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: AppendItemsDto,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.orders.appendItems(id, dto, req.user);
   }
 
   @Get(':id')

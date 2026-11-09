@@ -1,9 +1,10 @@
 import {
-  BadRequestException, ConflictException, Injectable, Logger, NotFoundException,
+  BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { AppendItemsDto } from './dto/append-items.dto';
 import { allocateOrderNumber } from '../common/utils/order-number';
 import { buildKitchenBarTicket } from '../printers/ticket.builders';
 import { PrintersService } from '../printers/printers.service';
@@ -177,12 +178,27 @@ export class OrdersService {
     } catch (err: any) {
       // 23505 = unique_violation — happens when two concurrent requests
       // carry the same client_uuid. The other one won; return its order.
+      // (a) Concurrent retry with the same clientUuid — return the winner.
       if (err?.code === '23505' && String(err.detail || '').includes('client_uuid')) {
         const dup = await this.db.query<{ id: string }>(
           `SELECT id FROM orders WHERE client_uuid = $1 LIMIT 1`,
           [dto.clientUuid],
         );
         if (dup.rows[0]) return this.fetchFullOrder(dup.rows[0].id);
+      }
+      // (b) Concurrent creation for a table that already has an active order —
+      //     the DB partial unique index refused a second active row. Return
+      //     the existing active order so the client behaves as if it "resumed".
+      if (
+        err?.code === '23505' &&
+        String(err.constraint || '').includes('orders_one_active_per_table') &&
+        dto.tableId
+      ) {
+        const existing = await this.db.query<{ id: string }>(
+          `SELECT id FROM orders WHERE table_id = $1 AND cancelled_at IS NULL LIMIT 1`,
+          [dto.tableId],
+        );
+        if (existing.rows[0]) return this.fetchFullOrder(existing.rows[0].id);
       }
       throw err;
     }
@@ -295,6 +311,178 @@ export class OrdersService {
     });
     this.logger.log(`Order ${result} cancelled by ${authUser.username}`);
     return this.fetchFullOrder(orderId);
+  }
+
+  async appendItems(orderId: string, dto: AppendItemsDto, authUser: AuthUser) {
+    // -------- Idempotency fast path (sequential retries) --------
+    const already = await this.db.query<{ order_id: string }>(
+      `SELECT order_id FROM order_append_batches WHERE client_uuid = $1`,
+      [dto.clientUuid],
+    );
+    if (already.rows[0]) {
+      return this.fetchFullOrder(already.rows[0].order_id);
+    }
+
+    // -------- Validate all products before opening a tx --------
+    const productIds = Array.from(new Set(dto.items.map((i) => i.productId)));
+    const productRes = await this.db.query<ProductRow>(
+      `SELECT id, name, selling_price, preparation_station, is_active
+         FROM products WHERE id = ANY($1::uuid[])`,
+      [productIds],
+    );
+    const productRows = productRes.rows as ProductRow[];
+    const productMap: Map<string, ProductRow> = new Map(
+      productRows.map((p) => [p.id, p]),
+    );
+
+    const invalidItems: { productId: string; reason: string }[] = [];
+    for (const item of dto.items) {
+      const p = productMap.get(item.productId);
+      if (!p) invalidItems.push({ productId: item.productId, reason: 'NOT_FOUND' });
+      else if (!p.is_active) invalidItems.push({ productId: item.productId, reason: 'INACTIVE' });
+    }
+    if (invalidItems.length > 0) {
+      throw new BadRequestException({
+        message: 'One or more products are invalid. Order was not changed.',
+        invalidItems,
+      });
+    }
+
+    // -------- Main transaction --------
+    try {
+      await this.db.transaction(async (client) => {
+        // Lock the order to serialize concurrent appends.
+        const cur = await client.query<{
+          id: string;
+          order_number: string;
+          cancelled_at: string | null;
+          waiter_id: string;
+        }>(
+          `SELECT id, order_number, cancelled_at, waiter_id
+             FROM orders WHERE id = $1 FOR UPDATE`,
+          [orderId],
+        );
+        const order = cur.rows[0];
+        if (!order) throw new NotFoundException('Order not found');
+        if (order.cancelled_at) {
+          throw new BadRequestException({
+            code: 'ORDER_CANCELLED',
+            message: 'Cannot add items to a cancelled order.',
+          });
+        }
+        if (authUser.role === 'WAITER' && order.waiter_id !== authUser.userId) {
+          throw new ForbiddenException('This order belongs to another waiter.');
+        }
+
+        // Insert the batch marker FIRST. The PK makes concurrent retries safe:
+        // the second caller's INSERT throws 23505 before touching order_items.
+        await client.query(
+          `INSERT INTO order_append_batches (client_uuid, order_id) VALUES ($1, $2)`,
+          [dto.clientUuid, orderId],
+        );
+
+        // Build line records with server-authoritative prices.
+        const lines = dto.items.map((it) => {
+          const p = productMap.get(it.productId)!;
+          const unit = parseFloat(p.selling_price);
+          return {
+            productId: p.id,
+            productName: p.name,
+            quantity: it.quantity,
+            unitPrice: unit,
+            lineTotal: +(unit * it.quantity).toFixed(2),
+            station: p.preparation_station as Station,
+            notes: it.notes ?? null,
+          };
+        });
+
+        // Insert every line — plain INSERTs, no client_uuid on items.
+        for (const l of lines) {
+          await client.query(
+            `INSERT INTO order_items
+               (order_id, product_id, quantity, unit_price, line_total, station, notes)
+             VALUES ($1, $2, $3, $4, $5, $6::"Station", $7)`,
+            [orderId, l.productId, l.quantity, l.unitPrice, l.lineTotal, l.station, l.notes],
+          );
+        }
+
+        // Recompute subtotal / total from ALL items on the order.
+        const sum = await client.query<{ subtotal: string }>(
+          `SELECT COALESCE(SUM(line_total), 0)::numeric(12,2) AS subtotal
+             FROM order_items WHERE order_id = $1`,
+          [orderId],
+        );
+        const newSubtotal = sum.rows[0].subtotal;
+
+        await client.query(
+          `UPDATE orders
+              SET subtotal = $2,
+                  total_amount = $2 - discount_amount,
+                  updated_at = now()
+            WHERE id = $1`,
+          [orderId, newSubtotal],
+        );
+
+        // Print jobs for the NEW items only.
+        const ctx = await client.query<{ waiter_name: string; table_name: string | null; order_type: string }>(
+          `SELECT u.full_name AS waiter_name, t.name AS table_name, o.order_type
+             FROM orders o
+             JOIN users u ON u.id = o.waiter_id
+             LEFT JOIN tables t ON t.id = o.table_id
+            WHERE o.id = $1`,
+          [orderId],
+        );
+        const waiterFullName = ctx.rows[0]?.waiter_name ?? authUser.username;
+        const tableName = ctx.rows[0]?.table_name ?? null;
+        const orderType = ctx.rows[0]?.order_type ?? 'DINE_IN';
+
+        const byStation = new Map<Station, typeof lines>();
+        for (const l of lines) {
+          if (!byStation.has(l.station)) byStation.set(l.station, []);
+          byStation.get(l.station)!.push(l);
+        }
+
+        for (const [station, stationLines] of byStation.entries()) {
+          if (station === Station.NONE) continue;
+          const printer = await this.printers.findPrinterForStation(client, station);
+          if (!printer) continue;
+          const payload = buildKitchenBarTicket({
+            orderNumber: order.order_number,
+            station,
+            waiterFullName,
+            tableName,
+            orderType,
+            orderNotes: null,
+            createdAt: new Date().toISOString(),
+            lines: stationLines.map((l) => ({
+              productName: l.productName,
+              quantity: l.quantity,
+              notes: l.notes,
+            })),
+          });
+          const ticketType =
+            station === Station.KITCHEN ? PrintTicketType.KITCHEN : PrintTicketType.BAR;
+          await client.query(
+            `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status)
+             VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING')`,
+            [orderId, printer.id, ticketType, payload],
+          );
+        }
+      });
+
+      return this.fetchFullOrder(orderId);
+    } catch (err: any) {
+      // Concurrent retry with the same clientUuid — the batch marker
+      // insert collided. The other caller won; return its order.
+      if (err?.code === '23505' && String(err.constraint || '').includes('order_append_batches')) {
+        const dup = await this.db.query<{ order_id: string }>(
+          `SELECT order_id FROM order_append_batches WHERE client_uuid = $1`,
+          [dto.clientUuid],
+        );
+        if (dup.rows[0]) return this.fetchFullOrder(dup.rows[0].order_id);
+      }
+      throw err;
+    }
   }
 
   async listForUser(authUser: AuthUser, limit = 50) {
