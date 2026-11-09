@@ -4,6 +4,8 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Nav } from './components/Nav';
 import { LoginPage } from './pages/LoginPage';
 import { WaiterHome } from './pages/waiter/WaiterHome';
+import { OrderPage } from './pages/waiter/OrderPage';
+import { MyOrdersPage } from './pages/waiter/MyOrdersPage';
 import { CashierHome } from './pages/cashier/CashierHome';
 import { ManagerHome } from './pages/manager/ManagerHome';
 import { KitchenHome } from './pages/kitchen/KitchenHome';
@@ -23,6 +25,22 @@ export default function App() {
           element={
             <ProtectedRoute allow={['WAITER']}>
               <WaiterHome />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/waiter/order/:tableId"
+          element={
+            <ProtectedRoute allow={['WAITER']}>
+              <OrderPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/waiter/orders"
+          element={
+            <ProtectedRoute allow={['WAITER']}>
+              <MyOrdersPage />
             </ProtectedRoute>
           }
         />
