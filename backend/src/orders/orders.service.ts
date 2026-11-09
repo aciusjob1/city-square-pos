@@ -195,7 +195,11 @@ export class OrdersService {
         dto.tableId
       ) {
         const existing = await this.db.query<{ id: string }>(
-          `SELECT id FROM orders WHERE table_id = $1 AND cancelled_at IS NULL LIMIT 1`,
+          `SELECT id FROM orders
+            WHERE table_id = $1
+              AND cancelled_at IS NULL
+              AND closed_at IS NULL
+            LIMIT 1`,
           [dto.tableId],
         );
         if (existing.rows[0]) return this.fetchFullOrder(existing.rows[0].id);
@@ -210,7 +214,7 @@ export class OrdersService {
               o.discount_amount, o.total_amount, o.paid_amount, o.currency,
               o.notes, o.client_uuid, o.sync_status,
               o.client_created_at, o.server_created_at,
-              o.cancelled_at, o.cancellation_reason,
+              o.cancelled_at, o.cancellation_reason, o.closed_at,
               u.id AS waiter_id, u.username AS waiter_username, u.full_name AS waiter_full_name,
               t.id AS table_id, t.name AS table_name
          FROM orders o
@@ -259,6 +263,7 @@ export class OrdersService {
       serverCreatedAt: row.server_created_at,
       cancelledAt: row.cancelled_at,
       cancellationReason: row.cancellation_reason,
+      closedAt: row.closed_at,
       waiter: { id: row.waiter_id, username: row.waiter_username, fullName: row.waiter_full_name },
       table: row.table_id ? { id: row.table_id, name: row.table_name } : null,
       items: items.rows.map((r) => ({
@@ -358,7 +363,7 @@ export class OrdersService {
           cancelled_at: string | null;
           waiter_id: string;
         }>(
-          `SELECT id, order_number, cancelled_at, waiter_id
+          `SELECT id, order_number, cancelled_at, closed_at, waiter_id
              FROM orders WHERE id = $1 FOR UPDATE`,
           [orderId],
         );
@@ -368,6 +373,12 @@ export class OrdersService {
           throw new BadRequestException({
             code: 'ORDER_CANCELLED',
             message: 'Cannot add items to a cancelled order.',
+          });
+        }
+        if ((order as any).closed_at) {
+          throw new BadRequestException({
+            code: 'ORDER_CLOSED',
+            message: 'Order is closed. Create a new order for this table.',
           });
         }
         if (authUser.role === 'WAITER' && order.waiter_id !== authUser.userId) {

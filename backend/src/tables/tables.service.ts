@@ -21,6 +21,7 @@ export class TablesService {
          LEFT JOIN orders o
            ON o.table_id = t.id
           AND o.cancelled_at IS NULL
+          AND o.closed_at IS NULL
         WHERE t.is_active = true
         ORDER BY t.name ASC`,
     );
@@ -41,7 +42,9 @@ export class TablesService {
 
     const r = await this.db.query<{ id: string }>(
       `SELECT id FROM orders
-        WHERE table_id = $1 AND cancelled_at IS NULL
+        WHERE table_id = $1
+          AND cancelled_at IS NULL
+          AND closed_at IS NULL
         LIMIT 1`,
       [tableId],
     );

@@ -1,42 +1,20 @@
 import {
-  BadRequestException, ConflictException, ForbiddenException,
+  BadRequestException, ConflictException,
   Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
-import { PrintersService } from '../printers/printers.service';
 import { buildReceiptTicket, PricedTicketLine } from '../printers/ticket.builders';
-import { PrintTicketType, Station } from '../printers/station.enum';
+import { PrintTicketType } from '../printers/station.enum';
 import { AuthUser } from '../orders/orders.service';
 
 @Injectable()
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
 
-  constructor(
-    private readonly db: DatabaseService,
-    private readonly printers: PrintersService,
-  ) {}
+  constructor(private readonly db: DatabaseService) {}
 
-  /**
-   * Create a RECEIPT print job for an order.
-   * IMPORTANT: this does NOT change the order in any way.
-   * It only adds a print_jobs row and returns the bill payload.
-   */
-  async requestBill(orderId: string, clientUuid: string, authUser: AuthUser) {
-    // 1) Sequential idempotency: if we already made a RECEIPT job with this
-    //    clientUuid, return it verbatim without re-printing.
-    const existing = await this.db.query<{ order_id: string }>(
-      `SELECT order_id FROM print_jobs
-        WHERE payload LIKE $1 AND ticket_type = 'RECEIPT'
-        LIMIT 1`,
-      [`%"clientUuid":"${clientUuid}"%`],
-    );
-    if (existing.rows[0]) {
-      return this.buildResponseForExistingJob(existing.rows[0].order_id);
-    }
-
-    // 2) Load the order + lines to build the receipt
+  async requestBill(orderId: string, authUser: AuthUser) {
     const ordRes = await this.db.query(
       `SELECT o.id, o.order_number, o.status, o.order_type, o.subtotal,
               o.discount_amount, o.total_amount, o.currency, o.notes,
@@ -58,6 +36,51 @@ export class ReceiptsService {
       });
     }
 
+    // Return a still-PENDING bill for this order (idempotent first print).
+    const existingPending = await this.db.query<{ id: string; payload: string }>(
+      `SELECT id, payload FROM print_jobs
+        WHERE order_id = $1
+          AND ticket_type = 'RECEIPT'
+          AND status = 'PENDING'
+          AND idempotency_key LIKE 'bill-%'
+        ORDER BY created_at ASC
+        LIMIT 1`,
+      [orderId],
+    );
+    if (existingPending.rows[0]) {
+      return {
+        printJobId: existingPending.rows[0].id,
+        orderId,
+        orderNumber: o.order_number,
+        bill: JSON.parse(existingPending.rows[0].payload),
+        reprint: false,
+      };
+    }
+
+    const confirmedCount = await this.db.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM print_jobs
+        WHERE order_id = $1
+          AND ticket_type = 'RECEIPT'
+          AND status IN ('SENT', 'CONFIRMED')`,
+      [orderId],
+    );
+    const priorPrints = parseInt(confirmedCount.rows[0].n, 10);
+    const idempotencyKey = priorPrints === 0
+      ? `bill-${orderId}`
+      : `bill-reprint-${orderId}-${priorPrints + 1}`;
+
+    const printer = await this.db.query<{ id: string }>(
+      `SELECT id FROM printers
+        WHERE is_active = true AND station = 'NONE'
+        ORDER BY created_at ASC LIMIT 1`,
+    );
+    if (!printer.rows[0]) {
+      throw new ConflictException({
+        code: 'NO_RECEIPT_PRINTER',
+        message: 'No receipt printer is configured.',
+      });
+    }
+
     const itemsRes = await this.db.query(
       `SELECT p.name AS product_name, oi.quantity, oi.unit_price, oi.line_total, oi.notes
          FROM order_items oi
@@ -74,22 +97,6 @@ export class ReceiptsService {
       notes: r.notes,
     }));
 
-    // 3) Locate the receipt printer (must exist per migration 002)
-    const printer = await this.db.query<{ id: string }>(
-      `SELECT id FROM printers
-        WHERE is_active = true AND station = 'NONE'
-        ORDER BY created_at ASC
-        LIMIT 1`,
-    );
-    if (!printer.rows[0]) {
-      throw new ConflictException({
-        code: 'NO_RECEIPT_PRINTER',
-        message: 'No receipt printer is configured.',
-      });
-    }
-
-    // 4) Build payload and insert print job. Everything in one transaction
-    //    so we never leave a half-written bill.
     const payload = buildReceiptTicket({
       orderNumber: o.order_number,
       waiterFullName: o.waiter_full_name,
@@ -104,49 +111,54 @@ export class ReceiptsService {
       lines,
     });
 
-    // Attach the clientUuid into the payload so the idempotency lookup above
-    // can find it next time. This is internal metadata, not shown to the guest.
-    const payloadWithMeta = (() => {
-      const parsed = JSON.parse(payload);
-      parsed.clientUuid = clientUuid;
-      return JSON.stringify(parsed);
-    })();
+    try {
+      const printJobId = await this.db.transaction(async (client: PoolClient) => {
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status, idempotency_key)
+           VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING', $5)
+           RETURNING id`,
+          [orderId, printer.rows[0].id, PrintTicketType.RECEIPT, payload, idempotencyKey],
+        );
+        await client.query(
+          `UPDATE orders SET closed_at = COALESCE(closed_at, now()) WHERE id = $1`,
+          [orderId],
+        );
+        return inserted.rows[0].id;
+      });
 
-    const inserted = await this.db.transaction(async (client: PoolClient) => {
-      const r = await client.query<{ id: string }>(
-        `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status)
-         VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING')
-         RETURNING id`,
-        [orderId, printer.rows[0].id, PrintTicketType.RECEIPT, payloadWithMeta],
+      this.logger.log(
+        `Bill job ${printJobId} (${idempotencyKey}) for ${o.order_number} by ${authUser.username}`,
       );
-      return r.rows[0].id;
-    });
 
-    this.logger.log(
-      `Receipt job ${inserted} for ${o.order_number} requested by ${authUser.username}`,
-    );
-
-    return {
-      printJobId: inserted,
-      orderId,
-      orderNumber: o.order_number,
-      bill: JSON.parse(payloadWithMeta),
-    };
-  }
-
-  private async buildResponseForExistingJob(orderId: string) {
-    const r = await this.db.query(
-      `SELECT id, payload FROM print_jobs
-        WHERE order_id = $1 AND ticket_type = 'RECEIPT'
-        ORDER BY created_at DESC LIMIT 1`,
-      [orderId],
-    );
-    if (!r.rows[0]) throw new NotFoundException('No existing receipt found');
-    return {
-      printJobId: r.rows[0].id,
-      orderId,
-      orderNumber: JSON.parse(r.rows[0].payload).header?.orderNumber,
-      bill: JSON.parse(r.rows[0].payload),
-    };
+      return {
+        printJobId,
+        orderId,
+        orderNumber: o.order_number,
+        bill: JSON.parse(payload),
+        reprint: priorPrints > 0,
+      };
+    } catch (err: any) {
+      if (
+        err?.code === '23505' &&
+        String(err.constraint || '').includes('print_jobs_idempotency_key')
+      ) {
+        const dup = await this.db.query<{ id: string; payload: string }>(
+          `SELECT id, payload FROM print_jobs
+            WHERE order_id = $1 AND ticket_type = 'RECEIPT'
+            ORDER BY created_at ASC LIMIT 1`,
+          [orderId],
+        );
+        if (dup.rows[0]) {
+          return {
+            printJobId: dup.rows[0].id,
+            orderId,
+            orderNumber: o.order_number,
+            bill: JSON.parse(dup.rows[0].payload),
+            reprint: false,
+          };
+        }
+      }
+      throw err;
+    }
   }
 }
