@@ -154,3 +154,59 @@ export async function deactivateUser(id: string) {
   });
 }
 
+export interface SettingsShape {
+  restaurantName: string;
+  currency: string;
+  timezone: string;
+  printerDefaults: {
+    kitchen: string | null;
+    bar: string | null;
+    receipt: string | null;
+  };
+}
+
+export interface PrinterRow {
+  id: string;
+  name: string;
+  ipAddress: string;
+  port: number;
+  station: 'KITCHEN' | 'BAR' | 'NONE';
+  isActive: boolean;
+}
+
+export async function getSettings() {
+  return apiFetch<{ settings: SettingsShape }>('/settings');
+}
+
+export async function patchSettings(updates: Record<string, any>) {
+  return apiFetch<{ ok: true }>('/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function listPrintersFull() {
+  return apiFetch<{ printers: PrinterRow[] }>('/printers');
+}
+
+export async function updatePrinter(id: string, input: {
+  name?: string;
+  ipAddress?: string;
+  port?: number;
+  station?: 'KITCHEN' | 'BAR' | 'NONE';
+  isActive?: boolean;
+}) {
+  return apiFetch<PrinterRow>(`/printers/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deactivatePrinter(id: string) {
+  return apiFetch<{ id: string; isActive: false }>(`/printers/${id}`, {
+    method: 'DELETE',
+  });
+}
+

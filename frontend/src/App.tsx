@@ -15,6 +15,7 @@ import { ManagerPlaceholder } from './pages/manager/ManagerPlaceholder';
 import { ManagerCategories } from './pages/manager/ManagerCategories';
 import { ManagerProducts } from './pages/manager/ManagerProducts';
 import { ManagerUsers } from './pages/manager/ManagerUsers';
+import { ManagerSettings } from './pages/manager/ManagerSettings';
 import { KitchenHome } from './pages/kitchen/KitchenHome';
 import { NotFound } from './pages/NotFound';
 
@@ -74,7 +75,7 @@ export default function App() {
           <Route path="users" element={<ManagerUsers />} />
           <Route path="categories" element={<ManagerCategories />} />
           <Route path="products" element={<ManagerProducts />} />
-          <Route path="settings" element={<ManagerPlaceholder />} />
+          <Route path="settings" element={<ManagerSettings />} />
         </Route>
 
         <Route
