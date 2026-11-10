@@ -1,4 +1,4 @@
-.manager-page { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
+.manager-page { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; overflow-x: hidden; }
 
 .manager-header {
   display: flex; justify-content: space-between; align-items: flex-start;

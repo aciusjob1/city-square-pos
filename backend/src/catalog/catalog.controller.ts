@@ -7,6 +7,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,5 +44,26 @@ export class CatalogController {
   @Roles('MANAGER', 'ADMIN')
   deactivateCategory(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.catalog.deactivateCategory(id);
+  }
+
+  @Post('products')
+  @Roles('MANAGER', 'ADMIN')
+  createProduct(@Body() dto: CreateProductDto) {
+    return this.catalog.createProduct(dto);
+  }
+
+  @Patch('products/:id')
+  @Roles('MANAGER', 'ADMIN')
+  updateProduct(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.catalog.updateProduct(id, dto);
+  }
+
+  @Delete('products/:id')
+  @Roles('MANAGER', 'ADMIN')
+  deactivateProduct(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.catalog.deactivateProduct(id);
   }
 }

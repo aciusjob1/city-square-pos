@@ -23,7 +23,7 @@ export class CatalogService {
 
   async products() {
     const r = await this.db.query(
-      `SELECT id, category_id, name, sku, selling_price, preparation_station
+      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station
          FROM products
         WHERE is_active = true
         ORDER BY category_id ASC, name ASC`,
@@ -35,6 +35,7 @@ export class CatalogService {
         name: p.name,
         sku: p.sku,
         sellingPrice: p.selling_price,
+        costPrice: p.cost_price,
         preparationStation: p.preparation_station,
       })),
     };
@@ -112,6 +113,134 @@ export class CatalogService {
       });
     }
     await this.db.query(`UPDATE categories SET is_active = false WHERE id = $1`, [id]);
+    return { id, isActive: false };
+  }
+
+
+  async createProduct(input: {
+    name: string;
+    sku?: string;
+    categoryId: string;
+    sellingPrice: number;
+    costPrice?: number;
+    preparationStation: string;
+  }) {
+    const name = input.name.trim();
+    if (!name) throw new BadRequestException('Product name is required');
+
+    const cat = await this.db.query(
+      `SELECT id, is_active FROM categories WHERE id = $1`,
+      [input.categoryId],
+    );
+    if (!cat.rows[0]) throw new BadRequestException('Category not found');
+    if (!cat.rows[0].is_active) throw new BadRequestException('Category is inactive');
+
+    const sku = input.sku?.trim() || null;
+
+    try {
+      const r = await this.db.query(
+        `INSERT INTO products (name, sku, category_id, selling_price, cost_price, preparation_station)
+         VALUES ($1, $2, $3, $4, $5, $6::"Station")
+         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active`,
+        [name, sku, input.categoryId, input.sellingPrice, input.costPrice ?? 0, input.preparationStation],
+      );
+      const p = r.rows[0];
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        categoryId: p.category_id,
+        sellingPrice: p.selling_price,
+        costPrice: p.cost_price,
+        preparationStation: p.preparation_station,
+        isActive: p.is_active,
+      };
+    } catch (e: any) {
+      if (e.code === '23505') {
+        throw new ConflictException({ code: 'DUPLICATE_SKU', message: 'A product with that SKU already exists.' });
+      }
+      throw e;
+    }
+  }
+
+  async updateProduct(id: string, input: {
+    name?: string;
+    sku?: string;
+    categoryId?: string;
+    sellingPrice?: number;
+    costPrice?: number;
+    preparationStation?: string;
+  }) {
+    const sets: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) throw new BadRequestException('Product name cannot be empty');
+      sets.push(`name = $${i++}`); params.push(name);
+    }
+    if (input.sku !== undefined) {
+      const sku = input.sku.trim() || null;
+      sets.push(`sku = $${i++}`); params.push(sku);
+    }
+    if (input.categoryId !== undefined) {
+      const cat = await this.db.query(
+        `SELECT id, is_active FROM categories WHERE id = $1`,
+        [input.categoryId],
+      );
+      if (!cat.rows[0]) throw new BadRequestException('Category not found');
+      if (!cat.rows[0].is_active) throw new BadRequestException('Category is inactive');
+      sets.push(`category_id = $${i++}`); params.push(input.categoryId);
+    }
+    if (input.sellingPrice !== undefined) {
+      sets.push(`selling_price = $${i++}`); params.push(input.sellingPrice);
+    }
+    if (input.costPrice !== undefined) {
+      sets.push(`cost_price = $${i++}`); params.push(input.costPrice);
+    }
+    if (input.preparationStation !== undefined) {
+      sets.push(`preparation_station = $${i++}::"Station"`); params.push(input.preparationStation);
+    }
+
+    if (sets.length === 0) throw new BadRequestException('No fields to update');
+    sets.push(`updated_at = now()`);
+    params.push(id);
+
+    try {
+      const r = await this.db.query(
+        `UPDATE products SET ${sets.join(', ')} WHERE id = $${i} AND is_active = true
+         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active`,
+        params,
+      );
+      if (!r.rows[0]) throw new NotFoundException('Product not found');
+      const p = r.rows[0];
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        categoryId: p.category_id,
+        sellingPrice: p.selling_price,
+        costPrice: p.cost_price,
+        preparationStation: p.preparation_station,
+        isActive: p.is_active,
+      };
+    } catch (e: any) {
+      if (e.code === '23505') {
+        throw new ConflictException({ code: 'DUPLICATE_SKU', message: 'A product with that SKU already exists.' });
+      }
+      throw e;
+    }
+  }
+
+  async deactivateProduct(id: string) {
+    const r = await this.db.query(
+      `UPDATE products SET is_active = false, updated_at = now()
+        WHERE id = $1 AND is_active = true
+        RETURNING id`,
+      [id],
+    );
+    if (!r.rows[0]) throw new NotFoundException('Product not found');
     return { id, isActive: false };
   }
 }

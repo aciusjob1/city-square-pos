@@ -40,3 +40,23 @@
   padding: 40px 16px;
   text-align: center;
 }
+
+/* Mobile: tighter tab padding so more tabs fit; subtle right-edge shadow hints scrollability */
+@media (max-width: 639px) {
+  .manager-tabs {
+    padding: 12px 12px 0;
+  }
+  .manager-tab {
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+}
+
+.manager-tabs {
+  background:
+    linear-gradient(to right, #f9fafb 30%, rgba(249, 250, 251, 0)) left center,
+    linear-gradient(to left, #f9fafb 30%, rgba(249, 250, 251, 0)) right center;
+  background-repeat: no-repeat;
+  background-size: 20px 100%, 20px 100%;
+  background-attachment: local, local;
+}

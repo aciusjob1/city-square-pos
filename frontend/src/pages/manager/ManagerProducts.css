@@ -1,0 +1,91 @@
+.manager-prod-form {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.manager-prod-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.manager-prod-form input,
+.manager-prod-form select {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.manager-prod-form .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.manager-prod-form button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.manager-prod-form button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.manager-prod-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.manager-prod-warning {
+  color: #92400e;
+  font-size: 0.8rem;
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.manager-prod-warning-row {
+  background: #fffbeb;
+}
+
+.manager-products-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manager-products-header h2 {
+  margin: 0;
+}
+
+/* Horizontal scroll wrapper for the products table on narrow screens */
+.manager-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -16px;
+  padding: 0 16px 4px;
+}
+
+.manager-table-scroll .manager-table {
+  min-width: 700px;
+}
