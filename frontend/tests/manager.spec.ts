@@ -60,7 +60,7 @@ test.describe('Manager dashboard', () => {
     await page.getByRole('link', { name: 'Users' }).click();
     await expect(page).toHaveURL(/\/manager\/users$/);
     await expect(page.getByRole('link', { name: 'Users' })).toHaveClass(/manager-tab-active/);
-    await expect(page.getByText('Users management')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Dashboard' }).click();
     await expect(page).toHaveURL(/\/manager$/);

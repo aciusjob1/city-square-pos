@@ -87,3 +87,70 @@ export async function deactivateProduct(id: string) {
   });
 }
 
+export interface UserRow {
+  id: string;
+  username: string;
+  email: string | null;
+  fullName: string;
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'WAITER' | 'KITCHEN';
+  isActive: boolean;
+  lastLoginAt: string | null;
+}
+
+export async function listUsersFull() {
+  return apiFetch<{ users: UserRow[] }>('/users');
+}
+
+export async function listRolesFull() {
+  return apiFetch<{ roles: string[] }>('/roles');
+}
+
+export async function createUser(input: {
+  username: string;
+  fullName: string;
+  email?: string;
+  role: string;
+  password: string;
+  pin?: string;
+}) {
+  return apiFetch<UserRow>('/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateUser(id: string, input: {
+  fullName?: string;
+  email?: string;
+  role?: string;
+}) {
+  return apiFetch<UserRow>(`/users/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function resetUserPassword(id: string, newPassword: string) {
+  return apiFetch<{ ok: true }>(`/users/${id}/password`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPassword }),
+  });
+}
+
+export async function setUserPin(id: string, pin: string) {
+  return apiFetch<{ ok: true }>(`/users/${id}/pin`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+}
+
+export async function deactivateUser(id: string) {
+  return apiFetch<{ id: string; isActive: false }>(`/users/${id}`, {
+    method: 'DELETE',
+  });
+}
+

@@ -1,0 +1,92 @@
+.manager-users-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manager-users-header h2 {
+  margin: 0;
+}
+
+.manager-user-form {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.manager-user-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.manager-user-form input,
+.manager-user-form select {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.manager-user-form .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.manager-user-form button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.manager-user-form button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.manager-user-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.manager-user-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.manager-user-pill.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.manager-user-pill.inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.manager-user-role {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
