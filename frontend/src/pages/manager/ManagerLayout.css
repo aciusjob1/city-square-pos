@@ -1,0 +1,42 @@
+.manager-tabs {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 16px 0;
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e5e7eb;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.manager-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.manager-tab {
+  display: inline-block;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.manager-tab:hover {
+  color: #111827;
+  text-decoration: none;
+}
+
+.manager-tab-active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.manager-placeholder {
+  padding: 40px 16px;
+  text-align: center;
+}

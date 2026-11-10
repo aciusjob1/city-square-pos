@@ -43,4 +43,27 @@ test.describe('Manager dashboard', () => {
   const empty = await page.locator(".manager-section", { hasText: "Sales by Hour" }).locator(".muted").count();
   expect(rows + empty).toBeGreaterThan(0);
   });
+
+  test('manager tab navigation is present and works', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Username').fill('manager');
+    await page.getByLabel('Password').fill('manager123');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/manager$/, { timeout: 10000 });
+
+    for (const label of ['Dashboard', 'Users', 'Categories', 'Products', 'Settings']) {
+      await expect(page.getByRole('link', { name: label })).toBeVisible();
+    }
+
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toHaveClass(/manager-tab-active/);
+
+    await page.getByRole('link', { name: 'Users' }).click();
+    await expect(page).toHaveURL(/\/manager\/users$/);
+    await expect(page.getByRole('link', { name: 'Users' })).toHaveClass(/manager-tab-active/);
+    await expect(page.getByText('Users management')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Dashboard' }).click();
+    await expect(page).toHaveURL(/\/manager$/);
+    await expect(page.locator('.kpi-card', { hasText: 'Total Sales' })).toBeVisible();
+  });
 });

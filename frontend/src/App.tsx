@@ -10,6 +10,8 @@ import { MyOrdersPage } from './pages/waiter/MyOrdersPage';
 import { PrintJobsPage } from './pages/print-jobs/PrintJobsPage';
 import { CashierHome } from './pages/cashier/CashierHome';
 import { ManagerHome } from './pages/manager/ManagerHome';
+import { ManagerLayout } from './pages/manager/ManagerLayout';
+import { ManagerPlaceholder } from './pages/manager/ManagerPlaceholder';
 import { KitchenHome } from './pages/kitchen/KitchenHome';
 import { NotFound } from './pages/NotFound';
 
@@ -61,10 +63,16 @@ export default function App() {
           path="/manager"
           element={
             <ProtectedRoute allow={['MANAGER', 'ADMIN']}>
-              <ManagerHome />
+              <ManagerLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<ManagerHome />} />
+          <Route path="users" element={<ManagerPlaceholder />} />
+          <Route path="categories" element={<ManagerPlaceholder />} />
+          <Route path="products" element={<ManagerPlaceholder />} />
+          <Route path="settings" element={<ManagerPlaceholder />} />
+        </Route>
 
         <Route
           path="/kitchen"
