@@ -1,0 +1,166 @@
+.kitchen-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+.kitchen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kitchen-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+
+.kitchen-subtitle {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.kitchen-refresh {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.kitchen-refresh:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.kitchen-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.kitchen-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 700px) {
+  .kitchen-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1100px) {
+  .kitchen-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.kitchen-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kitchen-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.kitchen-order-number {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.kitchen-location {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 4px;
+}
+
+.kitchen-waiter {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.kitchen-age {
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.kitchen-age-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.kitchen-age-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.kitchen-age-late {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.kitchen-time-sent {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.kitchen-badge-preparing {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.kitchen-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kitchen-items li {
+  font-size: 1rem;
+  color: #111827;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kitchen-qty {
+  font-weight: 700;
+  min-width: 1.8rem;
+}
+
+.kitchen-note {
+  color: #6b7280;
+  font-style: italic;
+}
