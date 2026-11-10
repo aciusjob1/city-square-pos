@@ -1,5 +1,6 @@
 import {
-  BadRequestException, ConflictException, Injectable, Logger, NotFoundException,
+  BadRequestException, ConflictException, ForbiddenException,
+  Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
@@ -58,6 +59,21 @@ export class BillGroupsService {
           code: 'ALREADY_IN_BILL_GROUP',
           message: `Order ${o.order_number} is already part of a bill group.`,
         });
+      }
+    }
+
+    // Waiters may only merge their own orders. Merging another waiter's
+    // orders affects two people's sales, so that's a cashier/manager action.
+    // This check is what lets us safely allow @Roles('WAITER', ...) on the
+    // merge endpoint — the ownership boundary is enforced here, not at the
+    // controller.
+    if (authUser.role === 'WAITER') {
+      for (const o of orders.rows) {
+        if (o.waiter_id !== authUser.userId) {
+          throw new ForbiddenException(
+            'Waiters can only merge their own orders. Ask a cashier to merge across waiters.',
+          );
+        }
       }
     }
 
@@ -274,7 +290,7 @@ export class BillGroupsService {
   }
 
   // ---------- FETCH ----------
-  async getBillGroup(billGroupId: string) {
+  async getBillGroup(billGroupId: string, authUser?: AuthUser) {
     const ordersRes = await this.db.query(
       `SELECT o.id, o.order_number, o.status, o.subtotal, o.total_amount, o.currency,
               o.closed_at, o.cancelled_at, o.bill_group_id,
@@ -289,6 +305,24 @@ export class BillGroupsService {
     );
     if (ordersRes.rows.length === 0) {
       throw new NotFoundException('Bill group not found.');
+    }
+    // Waiters can only view groups where every order belongs to them.
+    if (authUser && authUser.role === 'WAITER') {
+      for (const o of ordersRes.rows) {
+        if (o.waiter_username) {
+          // If we have the username in the row, verify against authUser
+          // This is only a safety net; controller will pass authUser for waiter callers
+        }
+      }
+      // Safer: fetch waiter_id per order and compare
+      const checkRes = await this.db.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM orders
+           WHERE bill_group_id = $1 AND waiter_id != $2`,
+        [billGroupId, authUser.userId],
+      );
+      if (parseInt(checkRes.rows[0].n, 10) > 0) {
+        throw new ForbiddenException('You can only view your own bill groups.');
+      }
     }
     const grandTotal = ordersRes.rows.reduce(
       (s, o) => s + parseFloat(o.total_amount),

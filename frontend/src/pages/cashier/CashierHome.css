@@ -264,3 +264,238 @@
   .cashier-header h1 { font-size: 1.25rem; }
   .row-meta { font-size: 0.8rem; gap: 8px; }
 }
+
+/* ---------- Merge bar ---------- */
+
+.merge-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1e40af;
+  color: #fff;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.2);
+}
+
+.merge-bar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.merge-bar-info strong {
+  font-size: 0.95rem;
+}
+
+.merge-bar-info span {
+  font-size: 0.82rem;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.merge-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.merge-bar-btn {
+  background: #fff;
+  color: #1e40af;
+  border: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.merge-bar-btn:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.merge-bar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.merge-bar-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.merge-bar-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- Row with checkbox ---------- */
+
+.cashier-row-inner {
+  display: flex;
+  align-items: stretch;
+}
+
+.cashier-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.cashier-checkbox input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+.cashier-row-header {
+  flex: 1;
+}
+
+/* ---------- Bill group row ---------- */
+
+.cashier-row-group {
+  border-color: #2563eb;
+  border-width: 2px;
+  background: #f0f7ff;
+}
+
+.cashier-group-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #dbeafe;
+}
+
+.badge-group {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.cashier-group-body {
+  padding: 12px 16px 16px;
+}
+
+.cashier-group-order {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.group-order-line {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.group-order-num {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #111827;
+}
+
+.group-order-waiter {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.group-order-total {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-order-expand {
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.group-order-expand:hover {
+  text-decoration: underline;
+}
+
+.cashier-details-inline {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #dbeafe;
+}
+
+.group-grand-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 12px;
+  background: #1e40af;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.group-print-btn {
+  flex: 1;
+  background: #2563eb;
+  color: #fff;
+  border: 0;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.group-print-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.group-print-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.group-unmerge-btn {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.group-unmerge-btn:hover:not(:disabled) {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.group-unmerge-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

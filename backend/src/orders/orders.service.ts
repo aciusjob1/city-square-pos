@@ -214,7 +214,7 @@ export class OrdersService {
               o.discount_amount, o.total_amount, o.paid_amount, o.currency,
               o.notes, o.client_uuid, o.sync_status,
               o.client_created_at, o.server_created_at,
-              o.cancelled_at, o.cancellation_reason, o.closed_at,
+              o.cancelled_at, o.cancellation_reason, o.closed_at, o.bill_group_id,
               u.id AS waiter_id, u.username AS waiter_username, u.full_name AS waiter_full_name,
               t.id AS table_id, t.name AS table_name
          FROM orders o
@@ -264,6 +264,7 @@ export class OrdersService {
       cancelledAt: row.cancelled_at,
       cancellationReason: row.cancellation_reason,
       closedAt: row.closed_at,
+      billGroupId: row.bill_group_id,
       waiter: { id: row.waiter_id, username: row.waiter_username, fullName: row.waiter_full_name },
       table: row.table_id ? { id: row.table_id, name: row.table_name } : null,
       items: items.rows.map((r) => ({
@@ -500,7 +501,7 @@ export class OrdersService {
     const isPrivileged = ['MANAGER', 'ADMIN', 'CASHIER'].includes(authUser.role);
     const sql = `
       SELECT o.id, o.order_number, o.status, o.order_type, o.total_amount, o.currency,
-             o.client_created_at, o.server_created_at, o.closed_at,
+             o.client_created_at, o.server_created_at, o.closed_at, o.bill_group_id,
              u.username AS waiter_username, u.full_name AS waiter_full_name
         FROM orders o
         JOIN users u ON u.id = o.waiter_id
@@ -521,6 +522,7 @@ export class OrdersService {
         clientCreatedAt: o.client_created_at,
         serverCreatedAt: o.server_created_at,
         closedAt: o.closed_at,
+        billGroupId: o.bill_group_id,
         waiter: { username: o.waiter_username, fullName: o.waiter_full_name },
       })),
     };

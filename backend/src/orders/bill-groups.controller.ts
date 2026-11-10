@@ -26,18 +26,21 @@ class BillGroupIdDto {
 export class BillGroupsController {
   constructor(private readonly billGroups: BillGroupsService) {}
 
+  // Merge: WAITER can merge their own orders (ownership enforced in service).
   @Post('merge')
-  @Roles('CASHIER', 'MANAGER', 'ADMIN')
+  @Roles('WAITER', 'CASHIER', 'MANAGER', 'ADMIN')
   merge(@Body() dto: MergeOrdersDto, @Req() req: { user: AuthUser }) {
     return this.billGroups.merge(dto.orderIds, req.user);
   }
 
+  // Unmerge: cashier+ only — dissolving a group can affect cross-waiter orders.
   @Post('unmerge')
   @Roles('CASHIER', 'MANAGER', 'ADMIN')
   unmerge(@Body() dto: BillGroupIdDto, @Req() req: { user: AuthUser }) {
     return this.billGroups.unmerge(dto.billGroupId, req.user);
   }
 
+  // Print consolidated bill: cashier+ only — this is the final billing action.
   @Post(':billGroupId/print')
   @Roles('CASHIER', 'MANAGER', 'ADMIN')
   printConsolidated(
@@ -47,9 +50,13 @@ export class BillGroupsController {
     return this.billGroups.printConsolidatedBill(billGroupId, req.user);
   }
 
+  // Get: WAITER can view their own groups (ownership enforced in service).
   @Get(':billGroupId')
-  @Roles('CASHIER', 'MANAGER', 'ADMIN')
-  getOne(@Param('billGroupId', new ParseUUIDPipe()) billGroupId: string) {
-    return this.billGroups.getBillGroup(billGroupId);
+  @Roles('WAITER', 'CASHIER', 'MANAGER', 'ADMIN')
+  getOne(
+    @Param('billGroupId', new ParseUUIDPipe()) billGroupId: string,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.billGroups.getBillGroup(billGroupId, req.user);
   }
 }

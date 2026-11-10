@@ -174,3 +174,56 @@ export function uuid(): string {
 // Same endpoint as listMyOrders — the backend scopes by role.
 // Cashier/Manager/Admin see all orders; Waiters see only their own.
 export const listOrdersForCashier = listMyOrders;
+
+// -------- Bill group helpers --------
+
+export interface BillGroupOrder {
+  id: string;
+  orderNumber: string;
+  status: string;
+  subtotal: string;
+  totalAmount: string;
+  closedAt: string | null;
+  cancelledAt: string | null;
+  waiter: { username: string; fullName: string };
+  tableName: string | null;
+}
+
+export interface BillGroupDetail {
+  billGroupId: string;
+  orderCount: number;
+  grandTotal: string;
+  currency: string;
+  orders: BillGroupOrder[];
+}
+
+export async function mergeOrders(orderIds: string[]) {
+  return apiFetch<{ billGroupId: string; orderIds: string[]; orderCount: number }>(
+    '/bill-groups/merge',
+    { method: 'POST', body: JSON.stringify({ orderIds }) },
+  );
+}
+
+export async function unmergeBillGroup(billGroupId: string) {
+  return apiFetch<{ billGroupId: string; orderIds: string[]; orderCount: number }>(
+    '/bill-groups/unmerge',
+    { method: 'POST', body: JSON.stringify({ billGroupId }) },
+  );
+}
+
+export async function printConsolidatedBill(billGroupId: string) {
+  return apiFetch<{
+    printJobId: string;
+    billGroupId: string;
+    orderCount: number;
+    grandTotal: string;
+    currency: string;
+  }>(`/bill-groups/${billGroupId}/print`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function getBillGroup(billGroupId: string) {
+  return apiFetch<BillGroupDetail>(`/bill-groups/${billGroupId}`);
+}
