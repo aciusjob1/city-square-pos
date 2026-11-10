@@ -12,6 +12,7 @@ import { CashierHome } from './pages/cashier/CashierHome';
 import { ManagerHome } from './pages/manager/ManagerHome';
 import { ManagerLayout } from './pages/manager/ManagerLayout';
 import { ManagerPlaceholder } from './pages/manager/ManagerPlaceholder';
+import { ManagerCategories } from './pages/manager/ManagerCategories';
 import { KitchenHome } from './pages/kitchen/KitchenHome';
 import { NotFound } from './pages/NotFound';
 
@@ -69,7 +70,7 @@ export default function App() {
         >
           <Route index element={<ManagerHome />} />
           <Route path="users" element={<ManagerPlaceholder />} />
-          <Route path="categories" element={<ManagerPlaceholder />} />
+          <Route path="categories" element={<ManagerCategories />} />
           <Route path="products" element={<ManagerPlaceholder />} />
           <Route path="settings" element={<ManagerPlaceholder />} />
         </Route>
