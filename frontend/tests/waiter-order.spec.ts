@@ -3,12 +3,12 @@ import { test, expect } from '@playwright/test';
 const BASE = 'http://localhost:5173';
 
 async function loginAsWaiter(page: import('@playwright/test').Page) {
-  await page.goto(`${BASE}/login`);
-  await switchToPasswordTab(page);
-  await page.getByLabel('Username').fill('john');
-  await page.getByLabel('Password').fill('waiter123');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/waiter$/);
+  await page.goto(`${BASE}/w/login`);
+  await page.locator('.keypad button', { hasText: /^1$/ }).click();
+  await page.locator('.keypad button', { hasText: /^2$/ }).click();
+  await page.locator('.keypad button', { hasText: /^3$/ }).click();
+  await page.locator('.keypad button', { hasText: /^4$/ }).click();
+  await expect(page).toHaveURL(/\/waiter$/, { timeout: 10000 });
 }
 
 async function switchToPasswordTab(page: import('@playwright/test').Page) {

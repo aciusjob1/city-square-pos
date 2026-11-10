@@ -3,6 +3,7 @@ import { useAuth, homePathForRole } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Nav } from './components/Nav';
 import { LoginPage } from './pages/LoginPage';
+import { WaiterLoginPage } from './pages/WaiterLoginPage';
 import { WaiterHome } from './pages/waiter/WaiterHome';
 import { OrderPage } from './pages/waiter/OrderPage';
 import { MyOrdersPage } from './pages/waiter/MyOrdersPage';
@@ -19,6 +20,7 @@ export default function App() {
     <>
       <Nav />
       <Routes>
+        <Route path="/w/login" element={<WaiterLoginPage />} />
         <Route path="/login" element={<LoginPage />} />
 
         <Route
