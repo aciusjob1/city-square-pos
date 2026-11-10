@@ -5,3 +5,4 @@ dist/
 *.tsbuildinfo
 playwright-probe.mjs
 playwright-probe.mjs
+playwright-probe.mjs

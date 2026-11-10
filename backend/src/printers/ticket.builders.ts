@@ -108,3 +108,57 @@ export function buildReceiptTicket(input: BuildReceiptInput): string {
   };
   return JSON.stringify(ticket);
 }
+
+// ---------------------------------------------------------------------------
+// 3) Consolidated bill — one receipt covering multiple orders for the same
+//    customer. Each order shows its own section with its own waiter and
+//    items. A grand total appears at the bottom. Used when the cashier merges
+//    several served orders (possibly from different waiters) into one bill.
+// ---------------------------------------------------------------------------
+
+export interface ConsolidatedOrderSection {
+  orderNumber: string;
+  waiterFullName: string;
+  createdAt: string;
+  lines: PricedTicketLine[];
+  subtotal: number;
+}
+
+export interface BuildConsolidatedReceiptInput {
+  orders: ConsolidatedOrderSection[];
+  tableName: string | null;
+  orderType: string;
+  currency: string;
+  grandTotal: number;
+  printedAt: string;
+}
+
+export function buildConsolidatedReceiptTicket(input: BuildConsolidatedReceiptInput): string {
+  const ticket = {
+    format: 'CITY_SQUARE_RECEIPT_V1',
+    kind: 'RECEIPT',
+    consolidated: true,
+    header: {
+      restaurantName: 'City Square Restaurant',
+      table: input.tableName,
+      orderType: input.orderType,
+      orderCount: input.orders.length,
+    },
+    sections: input.orders.map((o) => ({
+      orderNumber: o.orderNumber,
+      waiter: o.waiterFullName,
+      createdAt: o.createdAt,
+      lines: o.lines,
+      subtotal: o.subtotal,
+    })),
+    totals: {
+      grandTotal: input.grandTotal,
+      currency: input.currency,
+    },
+    footer: {
+      generatedAt: input.printedAt,
+      message: 'Thank you — Karibu tena',
+    },
+  };
+  return JSON.stringify(ticket);
+}
