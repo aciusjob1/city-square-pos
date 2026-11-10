@@ -46,7 +46,15 @@ export class OrdersController {
     return this.orders.appendItems(id, dto, req.user);
   }
 
+  @Get('kitchen')
+  @Roles('KITCHEN', 'MANAGER', 'ADMIN')
+  kitchenList(@Query('limit') limit?: string) {
+    const n = Math.min(Math.max(parseInt(limit || '100', 10) || 100, 1), 200);
+    return this.orders.listForKitchen(n);
+  }
+
   @Get(':id')
+  @Roles('WAITER', 'CASHIER', 'MANAGER', 'ADMIN')
   getOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.orders.fetchFullOrder(id);
   }

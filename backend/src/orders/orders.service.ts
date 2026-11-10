@@ -527,4 +527,63 @@ export class OrdersService {
       })),
     };
   }
+
+  async listForKitchen(limit = 100) {
+    const sql = `
+      SELECT o.id, o.order_number, o.status, o.order_type, o.currency,
+             o.server_created_at,
+             u.username AS waiter_username, u.full_name AS waiter_full_name,
+             t.name AS table_name
+        FROM orders o
+        JOIN users u ON u.id = o.waiter_id
+   LEFT JOIN tables t ON t.id = o.table_id
+       WHERE o.status IN ('SENT_TO_KITCHEN', 'PREPARING')
+         AND o.cancelled_at IS NULL
+         AND o.closed_at IS NULL
+       ORDER BY o.server_created_at ASC
+       LIMIT $1`;
+
+    const ordersResult = await this.db.query(sql, [limit]);
+    if (ordersResult.rows.length === 0) {
+      return { count: 0, orders: [] };
+    }
+
+    const orderIds = ordersResult.rows.map((r: any) => r.id);
+
+    const itemsResult = await this.db.query(
+      `SELECT oi.id, oi.order_id, p.name AS product_name, oi.quantity, oi.notes
+         FROM order_items oi
+         JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = ANY($1::uuid[])
+          AND oi.station = 'KITCHEN'
+        ORDER BY oi.created_at ASC`,
+      [orderIds],
+    );
+
+    const itemsByOrder = new Map<string, any[]>();
+    for (const it of itemsResult.rows) {
+      const list = itemsByOrder.get(it.order_id) ?? [];
+      list.push({
+        id: it.id,
+        productName: it.product_name,
+        quantity: it.quantity,
+        notes: it.notes,
+      });
+      itemsByOrder.set(it.order_id, list);
+    }
+
+    return {
+      count: ordersResult.rows.length,
+      orders: ordersResult.rows.map((o: any) => ({
+        id: o.id,
+        orderNumber: o.order_number,
+        status: o.status,
+        orderType: o.order_type,
+        tableName: o.table_name,
+        waiterFullName: o.waiter_full_name,
+        serverCreatedAt: o.server_created_at,
+        items: itemsByOrder.get(o.id) ?? [],
+      })),
+    };
+  }
 }
