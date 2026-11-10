@@ -5,12 +5,16 @@
  *   - Attach Authorization: Bearer <token> when present.
  *   - Parse JSON responses uniformly.
  *   - On 401 from a PROTECTED endpoint, clear auth and redirect to /login.
- *   - On 401 from /auth/login, return the server's actual error message
- *     (Invalid credentials) rather than falsely saying "Session expired".
+ *   - On 401 from a login endpoint (/auth/login, /auth/login-pin),
+ *     return the server's actual error message instead of falsely
+ *     saying "Session expired".
  */
 
 const BASE = '/api';
 const TOKEN_KEY = 'cs_auth_token';
+
+// Endpoints where a 401 means "wrong credentials", not "session expired"
+const LOGIN_ENDPOINTS = ['/auth/login', '/auth/login-pin'];
 
 export interface ApiResult<T> {
   ok: boolean;
@@ -44,7 +48,6 @@ export async function apiFetch<T>(
     };
   }
 
-  // Parse body first so we can pass through the server's error message.
   let body: unknown = null;
   const text = await response.text();
   if (text) {
@@ -55,37 +58,30 @@ export async function apiFetch<T>(
     }
   }
 
-  // Handle 401 differently depending on the endpoint.
   if (response.status === 401) {
-    const isLoginRequest = path === '/auth/login';
+    const isLoginEndpoint = LOGIN_ENDPOINTS.some((p) => path === p);
 
-    if (!isLoginRequest) {
-      // A token was present but rejected, OR a protected route denied access.
-      // Wipe local auth and redirect to login.
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem('cs_auth_user');
-      localStorage.removeItem('cs_auth_exp');
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login');
-      }
-      return {
-        ok: false,
-        status: 401,
-        data: null,
-        errorMessage: 'Session expired. Please sign in again.',
-      };
+    if (isLoginEndpoint) {
+      // Pass through the server's message: "Invalid credentials", "Invalid PIN"
+      const message =
+        (body && typeof body === 'object' && 'message' in body
+          ? String((body as Record<string, unknown>).message)
+          : null) ?? 'Authentication failed';
+      return { ok: false, status: 401, data: null, errorMessage: message };
     }
 
-    // Login 401: pass through the backend's message ("Invalid credentials").
-    const loginMessage =
-      (body && typeof body === 'object' && 'message' in body
-        ? String((body as Record<string, unknown>).message)
-        : null) ?? 'Invalid credentials';
+    // Protected endpoint with a bad/expired token
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('cs_auth_user');
+    localStorage.removeItem('cs_auth_exp');
+    if (window.location.pathname !== '/login') {
+      window.location.replace('/login');
+    }
     return {
       ok: false,
       status: 401,
       data: null,
-      errorMessage: loginMessage,
+      errorMessage: 'Session expired. Please sign in again.',
     };
   }
 

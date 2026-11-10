@@ -1026,3 +1026,445 @@ a:focus-visible {
 }
 
 .center { text-align: center; }
+
+/* ============================================================================
+   Login — tabs + PIN keypad
+   ============================================================================ */
+
+.login-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin: -8px -8px 20px;
+}
+
+.login-tab {
+  flex: 1;
+  padding: 14px 8px;
+  border: 0;
+  background: transparent;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.login-tab:hover { color: var(--text); }
+
+.login-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* PIN dots */
+
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 24px 0 8px;
+}
+
+.pin-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pin-dot.filled {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.pin-dot.error {
+  border-color: var(--danger);
+  background: transparent;
+}
+
+/* Numeric keypad */
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 24px 0 16px;
+}
+
+.pin-key {
+  height: 64px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pin-key:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.pin-key:active:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+
+.pin-key.clear {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.pin-key.clear:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Sign-in button below keypad */
+
+.pin-submit {
+  width: 100%;
+  min-height: 52px;
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.15s;
+}
+
+.pin-submit:hover:not(:disabled) { background: var(--primary-hover); }
+.pin-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (min-width: 480px) {
+  .pin-keypad { gap: 14px; }
+  .pin-key { height: 72px; font-size: 1.6rem; }
+}
+
+/* Animation for wrong-PIN shake — subtle */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.pin-dots.error .pin-dot {
+  animation: shake 0.25s ease-in-out;
+}
+
+/* ============================================================================
+   Login page v2 — more polished, professional
+   Supersedes the earlier login-tabs / pin-keypad rules where they overlap.
+   Every class used by Playwright tests is preserved:
+     .login-tab, .pin-keypad, .pin-key, .pin-dot, .pin-submit, .error
+   ============================================================================ */
+
+/* Overall page: subtle gradient background, generous spacing */
+
+.login-wrap {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #e8efff 0%, transparent 60%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef2f8 100%);
+}
+
+/* The card itself: bigger, better shadow, tighter internal rhythm */
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.08),
+    0 4px 12px rgba(15, 23, 42, 0.04);
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .login-wrap { padding: 20px 12px; }
+  .login-card {
+    padding: 28px 20px 22px;
+    border-radius: 14px;
+  }
+}
+
+/* Branding block: crest + name */
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.login-crest {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.4rem;
+  letter-spacing: -1px;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+}
+
+.login-card h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin: 0;
+  text-align: center;
+  color: var(--text);
+}
+
+.login-card .subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+  font-size: 0.9rem;
+}
+
+/* Tab bar: segmented control, cleaner active state */
+
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 0 0 24px;
+}
+
+.login-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 7px;
+  margin: 0;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  border-bottom: 0;
+}
+
+.login-tab:hover {
+  color: var(--text);
+}
+
+.login-tab.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  border-bottom: 0;
+}
+
+/* PIN dots: bigger, better spacing, subtle pulse on error */
+
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 8px 0 4px;
+}
+
+.pin-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.pin-dot.filled {
+  background: var(--primary);
+  border-color: var(--primary);
+  transform: scale(1.08);
+}
+
+.pin-dot.error {
+  border-color: var(--danger);
+}
+
+/* Error message */
+
+.login-card .error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+/* PIN keypad: white keys, subtle borders, clear clear/back labels */
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 24px 0 8px;
+}
+
+.pin-key {
+  height: 60px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 10px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.05s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.pin-key:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.pin-key:active:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--primary-soft);
+}
+
+.pin-key.clear {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.pin-key.clear:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+@media (min-width: 480px) {
+  .pin-keypad { gap: 12px; }
+  .pin-key { height: 66px; font-size: 1.5rem; }
+}
+
+/* Sign in button: solid only when 4 digits entered */
+
+.pin-submit {
+  width: 100%;
+  min-height: 50px;
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background 0.15s, opacity 0.15s, transform 0.05s;
+  letter-spacing: 0.2px;
+}
+
+.pin-submit:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.pin-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.pin-submit:disabled {
+  opacity: 1;
+  background: #c7d6f5;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+/* Password tab: same padding rhythm as PIN */
+
+.login-card form.form {
+  gap: 14px;
+}
+
+.login-card form.form button[type="submit"] {
+  min-height: 50px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+/* Helper footer */
+
+.login-footer {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.login-footer strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Shake animation refinement */
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.pin-dots.error .pin-dot {
+  animation: shake 0.35s ease-in-out;
+}

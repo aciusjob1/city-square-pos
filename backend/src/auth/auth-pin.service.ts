@@ -68,14 +68,14 @@ export class AuthPinService {
       [lookup],
     );
     if (!found.rows[0]) {
-      throw new UnauthorizedException('Invalid PIN');
+      throw new UnauthorizedException('Incorrect PIN');
     }
     const user = found.rows[0];
 
     // 4) bcrypt verification (defense in depth)
     const ok = await bcrypt.compare(pin, user.pin_hash);
     if (!ok) {
-      throw new UnauthorizedException('Invalid PIN');
+      throw new UnauthorizedException('Incorrect PIN');
     }
 
     // 5) Issue JWT — same shape as password login

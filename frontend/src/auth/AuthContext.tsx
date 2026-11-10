@@ -10,17 +10,12 @@ interface AuthState {
   token: string | null;
   ready: boolean;
   login: (username: string, password: string) => Promise<{ ok: boolean; error: string | null }>;
+  loginPin: (pin: string) => Promise<{ ok: boolean; error: string | null }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
-/**
- * Decode JWT payload without a library. We only read `exp`; we never trust
- * other claims from the client-side token for authorization decisions.
- * Authorization decisions are always made by the server; we only use the
- * decoded `exp` to schedule a logout at the exact expiry moment.
- */
 function readJwtExpiry(token: string): number | null {
   try {
     const [, payloadB64] = token.split('.');
@@ -86,7 +81,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, ms);
   }, [clearAuth]);
 
-  // On mount: restore session if still valid
+  const persistAuth = useCallback((payload: LoginResponse) => {
+    const expiresAt = readJwtExpiry(payload.accessToken);
+    if (!expiresAt) return false;
+    localStorage.setItem(TOKEN_STORAGE_KEY, payload.accessToken);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user));
+    localStorage.setItem(EXP_STORAGE_KEY, String(expiresAt));
+    setToken(payload.accessToken);
+    setUser(payload.user);
+    scheduleExpiry(expiresAt);
+    return true;
+  }, [scheduleExpiry]);
+
   useEffect(() => {
     const stored = loadStoredAuth();
     if (stored) {
@@ -107,22 +113,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok || !res.data) {
       return { ok: false, error: res.errorMessage ?? 'Login failed' };
     }
-    const expiresAt = readJwtExpiry(res.data.accessToken);
-    if (!expiresAt) {
+    if (!persistAuth(res.data)) {
       return { ok: false, error: 'Server returned an unparseable token' };
     }
-    localStorage.setItem(TOKEN_STORAGE_KEY, res.data.accessToken);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(res.data.user));
-    localStorage.setItem(EXP_STORAGE_KEY, String(expiresAt));
-    setToken(res.data.accessToken);
-    setUser(res.data.user);
-    scheduleExpiry(expiresAt);
     return { ok: true, error: null };
-  }, [scheduleExpiry]);
+  }, [persistAuth]);
+
+  const loginPin = useCallback(async (pin: string) => {
+    const res = await apiFetch<LoginResponse>('/auth/login-pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin }),
+    });
+    if (!res.ok || !res.data) {
+      return { ok: false, error: res.errorMessage ?? 'PIN login failed' };
+    }
+    if (!persistAuth(res.data)) {
+      return { ok: false, error: 'Server returned an unparseable token' };
+    }
+    return { ok: true, error: null };
+  }, [persistAuth]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, token, ready, login, logout: clearAuth }),
-    [user, token, ready, login, clearAuth],
+    () => ({ user, token, ready, login, loginPin, logout: clearAuth }),
+    [user, token, ready, login, loginPin, clearAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -134,7 +147,6 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
-/** Where should this role land after login? */
 export function homePathForRole(role: User['role']): string {
   switch (role) {
     case 'WAITER': return '/waiter';
