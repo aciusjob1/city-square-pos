@@ -500,7 +500,7 @@ export class OrdersService {
     const isPrivileged = ['MANAGER', 'ADMIN', 'CASHIER'].includes(authUser.role);
     const sql = `
       SELECT o.id, o.order_number, o.status, o.order_type, o.total_amount, o.currency,
-             o.client_created_at, o.server_created_at,
+             o.client_created_at, o.server_created_at, o.closed_at,
              u.username AS waiter_username, u.full_name AS waiter_full_name
         FROM orders o
         JOIN users u ON u.id = o.waiter_id
@@ -520,6 +520,7 @@ export class OrdersService {
         currency: o.currency,
         clientCreatedAt: o.client_created_at,
         serverCreatedAt: o.server_created_at,
+        closedAt: o.closed_at,
         waiter: { username: o.waiter_username, fullName: o.waiter_full_name },
       })),
     };

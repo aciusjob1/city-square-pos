@@ -112,6 +112,7 @@ export async function listMyOrders() {
     currency: string;
     clientCreatedAt: string;
     serverCreatedAt: string;
+    closedAt: string | null;
     waiter: { username: string; fullName: string };
   }> }>('/orders');
 }
@@ -168,3 +169,8 @@ export async function listPrintJobs(filters?: {
 export function uuid(): string {
   return crypto.randomUUID();
 }
+
+// -------- Cashier helpers --------
+// Same endpoint as listMyOrders — the backend scopes by role.
+// Cashier/Manager/Admin see all orders; Waiters see only their own.
+export const listOrdersForCashier = listMyOrders;
