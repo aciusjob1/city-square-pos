@@ -26,11 +26,11 @@ export function LoginPage() {
   };
 
   return (
-    <div className="page">
-      <h1>City Square</h1>
-      <p className="muted">Sign in to continue</p>
+    <div className="login-wrap">
+      <form className="form login-card" onSubmit={onSubmit}>
+        <h1>City Square</h1>
+        <p className="subtitle">Sign in to continue</p>
 
-      <form className="form card" onSubmit={onSubmit}>
         <label>
           Username
           <input

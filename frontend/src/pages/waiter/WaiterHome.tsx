@@ -22,12 +22,16 @@ export function WaiterHome() {
   return (
     <div className="page">
       <h1>Tables</h1>
-      <p className="muted">Signed in as {user?.fullName}</p>
+      <p className="subtitle">Signed in as {user?.fullName}</p>
 
       {error && <div className="error">{error}</div>}
 
+      <Link to="/waiter/order/takeaway" className="takeaway-cta">
+        + New Takeaway Order
+      </Link>
+
       {!tables && !error && (
-        <p className="muted" style={{ marginTop: 24 }}>Loading…</p>
+        <p className="muted" style={{ marginTop: 24 }}>Loading tables…</p>
       )}
 
       {tables && (
@@ -37,11 +41,10 @@ export function WaiterHome() {
               key={t.id}
               to={`/waiter/order/${t.id}`}
               className={`table-card${t.activeOrderId ? ' occupied' : ''}`}
-              style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <span className="table-name">{t.name}</span>
               <span className="table-meta">
-                {t.activeOrderId ? 'Active order' : 'Empty'}
+                {t.activeOrderId ? '● Active order' : 'Empty'}
               </span>
             </Link>
           ))}

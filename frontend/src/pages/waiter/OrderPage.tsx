@@ -9,8 +9,10 @@ import type { CategoryRow, ProductRow, FullOrder } from '../../lib/waiter.api';
 type CartLine = { productId: string; quantity: number };
 
 export function OrderPage() {
-  const { tableId } = useParams<{ tableId: string }>();
+  const { tableId: routeParam } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
+  const isTakeaway = routeParam === 'takeaway';
+  const tableId = isTakeaway ? null : routeParam;
 
   // Catalog
   const [categories, setCategories] = useState<CategoryRow[]>([]);
@@ -31,7 +33,7 @@ export function OrderPage() {
 
   // ---- Load catalog + existing order ----
   useEffect(() => {
-    if (!tableId) return;
+    if (!tableId && !isTakeaway) return;
     let cancelled = false;
 
     (async () => {
@@ -45,6 +47,7 @@ export function OrderPage() {
       setProducts(prodsRes.data?.products ?? []);
       setSelectedCategoryId(catsRes.data?.categories?.[0]?.id ?? null);
 
+      if (isTakeaway) return; // no existing order to resume
       const activeRes = await getActiveOrderForTable(tableId);
       if (cancelled) return;
       if (activeRes.ok && activeRes.data?.activeOrderId) {
@@ -56,7 +59,7 @@ export function OrderPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [tableId]);
+  }, [tableId, isTakeaway]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -107,14 +110,24 @@ export function OrderPage() {
       quantity: l.qty,
     }));
 
-    const res = activeOrder
-      ? await appendItems(activeOrder.id, { clientUuid: uuid(), items: payloadItems })
-      : await createOrder({
-          clientUuid: uuid(),
-          tableId,
-          orderType: 'DINE_IN',
-          items: payloadItems,
-        });
+    // Takeaway: always a new order, no table. Table order: append if active, else create.
+    let res;
+    if (activeOrder && !isTakeaway) {
+      res = await appendItems(activeOrder.id, { clientUuid: uuid(), items: payloadItems });
+    } else if (isTakeaway) {
+      res = await createOrder({
+        clientUuid: uuid(),
+        orderType: 'TAKEAWAY',
+        items: payloadItems,
+      });
+    } else {
+      res = await createOrder({
+        clientUuid: uuid(),
+        tableId: tableId!,
+        orderType: 'DINE_IN',
+        items: payloadItems,
+      });
+    }
 
     setSending(false);
     if (!res.ok || !res.data) {
@@ -133,7 +146,7 @@ export function OrderPage() {
     <>
       <div className="order-header">
         <button className="back" onClick={() => navigate('/waiter')}>←</button>
-        <div className="title">{tableLabel} · Taking order</div>
+        <div className="title">{isTakeaway ? 'Takeaway' : tableLabel} · Taking order</div>
       </div>
 
       <div className="page" style={{ paddingTop: 0 }}>

@@ -18,20 +18,36 @@ export function Nav() {
     navigate('/login', { replace: true });
   };
 
-  const navLink = (to: string, label: string) => {
-    const active = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
-    return <Link to={to} className={active ? 'active' : undefined}>{label}</Link>;
-  };
+  const isActive = (to: string) =>
+    location.pathname === to ||
+    (to !== '/' && location.pathname.startsWith(to + '/')) ||
+    (to === '/waiter' && location.pathname === '/waiter/orders');
+
+  const navLink = (to: string, label: string) => (
+    <Link
+      to={to}
+      className={isActive(to) ? 'active' : undefined}
+    >
+      {label}
+    </Link>
+  );
 
   return (
     <nav className="nav">
-      <span className="brand">City Square</span>
-      {isWaiter && navLink('/waiter', 'Tables')}
-      {isWaiter && navLink('/waiter/orders', 'My Orders')}
-      {isCashier && <Link to="/cashier">Cashier</Link>}
-      {isManager && <Link to="/manager">Manager</Link>}
-      {isKitchen && <Link to="/kitchen">Kitchen</Link>}
-      <button onClick={onLogout}>Sign out</button>
+      <Link to="/" className="brand">City Square</Link>
+      <div className="nav-links">
+        {isWaiter && navLink('/waiter', 'Tables')}
+        {isWaiter && navLink('/waiter/orders', 'My Orders')}
+        {isCashier && <Link to="/cashier">Cashier</Link>}
+        {isManager && <Link to="/manager">Manager</Link>}
+        {isKitchen && <Link to="/kitchen">Kitchen</Link>}
+        {(isWaiter || isCashier || isManager) && navLink('/print-jobs', 'Print Jobs')}
+      </div>
+      <div className="user-info">
+        <span className="role-badge">{user.role}</span>
+        <span>{user.fullName}</span>
+      </div>
+      <button className="signout" onClick={onLogout}>Sign out</button>
     </nav>
   );
 }
