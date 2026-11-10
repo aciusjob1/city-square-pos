@@ -37,8 +37,10 @@ test.describe('Manager dashboard', () => {
 
     await expect(page.getByRole('heading', { name: 'Sales by Hour' })).toHaveCount(1);
 
-    const rows = await page.locator('.manager-hourly-row').count();
-    const empty = await page.locator('.manager-section', { hasText: 'Sales by Hour' }).locator('.muted').count();
-    expect(rows + empty).toBeGreaterThan(0);
+    // Wait for the section to finish rendering (either rows or the empty message)
+  await expect(page.locator(".manager-hourly-row, .muted").first()).toBeVisible({ timeout: 5000 });
+  const rows = await page.locator(".manager-hourly-row").count();
+  const empty = await page.locator(".manager-section", { hasText: "Sales by Hour" }).locator(".muted").count();
+  expect(rows + empty).toBeGreaterThan(0);
   });
 });
