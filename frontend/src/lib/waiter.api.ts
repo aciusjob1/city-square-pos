@@ -102,7 +102,8 @@ export async function getOrder(orderId: string) {
   return apiFetch<FullOrder>(`/orders/${orderId}`);
 }
 
-export async function listMyOrders() {
+export async function listMyOrders(limit?: number) {
+  const qs = limit ? `?limit=${limit}` : '';
   return apiFetch<{ count: number; orders: Array<{
     id: string;
     orderNumber: string;
@@ -114,7 +115,7 @@ export async function listMyOrders() {
     serverCreatedAt: string;
     closedAt: string | null;
     waiter: { username: string; fullName: string };
-  }> }>('/orders');
+  }> }>('/orders' + qs);
 }
 
 export async function createOrder(input: {
@@ -173,7 +174,9 @@ export function uuid(): string {
 // -------- Cashier helpers --------
 // Same endpoint as listMyOrders — the backend scopes by role.
 // Cashier/Manager/Admin see all orders; Waiters see only their own.
-export const listOrdersForCashier = listMyOrders;
+export async function listOrdersForCashier(limit?: number) {
+  return listMyOrders(limit);
+}
 
 // -------- Bill group helpers --------
 
@@ -226,4 +229,10 @@ export async function printConsolidatedBill(billGroupId: string) {
 
 export async function getBillGroup(billGroupId: string) {
   return apiFetch<BillGroupDetail>(`/bill-groups/${billGroupId}`);
+}
+
+// -------- Report helpers --------
+
+export async function getDailyReport(date: string) {
+  return apiFetch<Record<string, unknown>>(`/reports/daily?date=${encodeURIComponent(date)}`);
 }

@@ -7,7 +7,7 @@ import * as crypto from 'crypto';
 import { DatabaseService } from '../database/database.service';
 
 const RATE_LIMIT_WINDOW_SEC = 60;
-const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_MAX = parseInt(process.env.PIN_RATE_LIMIT_MAX || '20', 10);
 const CLEANUP_WINDOW_MIN = 10;
 
 interface PinUserRow {

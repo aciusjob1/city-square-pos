@@ -1,0 +1,181 @@
+/* ---------- Merge bar (waiter) ---------- */
+
+.merge-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1e40af;
+  color: #fff;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.2);
+}
+
+.merge-bar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.merge-bar-info strong {
+  font-size: 0.95rem;
+}
+
+.merge-bar-info span {
+  font-size: 0.82rem;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.merge-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.merge-bar-btn {
+  background: #fff;
+  color: #1e40af;
+  border: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.merge-bar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.merge-bar-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ---------- Order card with checkbox ---------- */
+
+.order-card-inner {
+  display: flex;
+  align-items: stretch;
+}
+
+.order-checkbox {
+  display: flex;
+  align-items: flex-start;
+  padding: 18px 12px 0;
+  cursor: pointer;
+}
+
+.order-checkbox input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+.order-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Group card (waiter) ---------- */
+
+.order-card-group {
+  border-color: #2563eb;
+  border-width: 2px;
+  background: #f0f7ff;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.group-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #111827;
+}
+
+.group-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.group-orders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.group-order {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.group-order-line {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.group-order-num {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #111827;
+}
+
+.group-order-waiter {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.group-order-total {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-grand-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #1e40af;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-footer {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-align: center;
+}

@@ -1,10 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH
   || '/data/data/com.termux/files/usr/bin/chromium-browser';
 
 export default defineConfig({
   testDir: './tests',
+  globalSetup: path.resolve(__dirname, 'playwright.global-setup.ts'),
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,

@@ -1,0 +1,218 @@
+.manager-page { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
+
+.manager-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.manager-header h1 { font-size: 1.5rem; margin: 0 0 4px; }
+
+.manager-refresh {
+  padding: 8px 14px; border: 1px solid #d1d5db; background: #fff;
+  border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+  color: #111827; cursor: pointer;
+}
+.manager-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.manager-date-picker {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 20px;
+}
+.manager-date-picker label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.9rem; font-weight: 500;
+}
+.manager-date-picker input {
+  padding: 6px 10px; border: 1px solid #d1d5db;
+  border-radius: 6px; font-size: 0.9rem;
+}
+
+.manager-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px; margin-bottom: 24px;
+}
+.kpi-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 14px 16px;
+}
+.kpi-card.kpi-warn { border-color: #fca5a5; background: #fef2f2; }
+.kpi-label {
+  font-size: 0.7rem; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  font-weight: 600; margin-bottom: 6px;
+}
+.kpi-value {
+  font-size: 1.15rem; font-weight: 700; color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-warn .kpi-value { color: #b91c1c; }
+
+.manager-section { margin-bottom: 28px; }
+.manager-section h2 {
+  font-size: 1.1rem; font-weight: 600;
+  margin: 0 0 12px; color: #111827;
+}
+
+.manager-table {
+  width: 100%; border-collapse: collapse;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; overflow: hidden;
+}
+.manager-table th, .manager-table td {
+  padding: 10px 14px; text-align: left;
+  font-size: 0.9rem; border-bottom: 1px solid #f3f4f6;
+}
+.manager-table th {
+  background: #f9fafb; color: #374151;
+  font-weight: 600; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.manager-table tr:last-child td { border-bottom: none; }
+.manager-table td:last-child {
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.manager-table td:nth-child(2) { text-align: right; }
+
+.manager-quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px; margin-bottom: 24px;
+}
+.manager-quick-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 14px 16px; text-decoration: none; color: inherit;
+  display: block; transition: border-color 0.15s, box-shadow 0.15s;
+}
+a.manager-quick-card:hover { border-color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
+.quick-label {
+  font-size: 0.75rem; color: #6b7280; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;
+}
+.quick-value {
+  font-size: 1.4rem; font-weight: 700; color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.manager-quick-card.quick-warn .quick-value { color: #b91c1c; }
+
+/* ---------- Hourly sales chart ---------- */
+
+.manager-hourly {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.manager-hourly-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 70px 110px;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.hour-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-bar-wrap {
+  background: #f3f4f6;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.hour-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #4f46e5 100%);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.hour-count {
+  text-align: right;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.hour-total {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+
+@media (max-width: 480px) {
+  .manager-hourly-row {
+    grid-template-columns: 48px 1fr 80px;
+    font-size: 0.85rem;
+  }
+  .hour-count { display: none; }
+  .hour-total { font-size: 0.85rem; }
+}
+
+/* ---------- Hourly sales chart ---------- */
+
+.manager-hourly {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.manager-hourly-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 70px 110px;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.hour-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-bar-wrap {
+  background: #f3f4f6;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.hour-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #4f46e5 100%);
+  border-radius: 999px;
+}
+
+.hour-count {
+  text-align: right;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.hour-total {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+
+@media (max-width: 480px) {
+  .manager-hourly-row {
+    grid-template-columns: 48px 1fr 80px;
+    font-size: 0.85rem;
+  }
+  .hour-count { display: none; }
+  .hour-total { font-size: 0.85rem; }
+}

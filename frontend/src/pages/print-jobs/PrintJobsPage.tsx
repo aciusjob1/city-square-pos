@@ -4,15 +4,27 @@ import type { PrintJobFull } from '../../lib/waiter.api';
 
 type Filter = 'ALL' | 'KITCHEN' | 'BAR' | 'RECEIPT';
 
+interface ParsedLine {
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  notes?: string | null;
+}
+
 interface ParsedTicket {
   format: string;
   kind: 'PREPARATION' | 'RECEIPT';
   station?: string;
+  consolidated?: boolean;
   header: {
     restaurantName: string;
     station?: string;
-    orderNumber: string;
-    createdAt: string;
+    orderNumber?: string;
+    table?: string | null;
+    orderType?: string;
+    orderCount?: number;
+    createdAt?: string;
   };
   context?: {
     waiter?: string;
@@ -20,17 +32,21 @@ interface ParsedTicket {
     orderType?: string;
     notes?: string | null;
   };
-  lines: Array<{
-    productName: string;
-    quantity: number;
-    unitPrice?: number;
-    lineTotal?: number;
-    notes?: string | null;
+  // Single-order receipts and prep tickets use `lines`
+  lines?: ParsedLine[];
+  // Consolidated receipts use `sections`
+  sections?: Array<{
+    orderNumber: string;
+    waiter: string;
+    createdAt: string;
+    lines: ParsedLine[];
+    subtotal: number;
   }>;
   totals?: {
-    subtotal: number;
-    discountAmount: number;
-    totalAmount: number;
+    subtotal?: number;
+    discountAmount?: number;
+    totalAmount?: number;
+    grandTotal?: number;
     currency: string;
   };
   footer?: { generatedAt: string; message?: string };
@@ -44,6 +60,26 @@ function fmtCurrency(n: number, currency: string) {
   return `${currency} ${Math.round(n).toLocaleString()}`;
 }
 
+function TicketLineRow({ line, currency }: { line: ParsedLine; currency: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+      <span>
+        {line.quantity}× {line.productName}
+        {line.notes && (
+          <span style={{ display: 'block', fontSize: 11, color: '#555' }}>
+            » {line.notes}
+          </span>
+        )}
+      </span>
+      {line.lineTotal !== undefined && (
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {fmtCurrency(line.lineTotal, currency)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function ThermalTicket({ job }: { job: PrintJobFull }) {
   const t = parsePayload(job.payload);
   if (!t) {
@@ -54,6 +90,67 @@ function ThermalTicket({ job }: { job: PrintJobFull }) {
     );
   }
 
+  // -------- Consolidated receipt (multiple orders in one bill) --------
+  if (t.consolidated && t.sections) {
+    const currency = t.totals?.currency ?? 'TZS';
+    return (
+      <div className="thermal-paper">
+        <div style={{ textAlign: 'center', fontWeight: 700 }}>
+          {t.header.restaurantName}
+        </div>
+        <div style={{ textAlign: 'center', letterSpacing: 2, marginBottom: 6, fontWeight: 600 }}>
+          BILL · CONSOLIDATED
+        </div>
+        {t.header.table && (
+          <div style={{ textAlign: 'center', marginBottom: 6 }}>Table: {t.header.table}</div>
+        )}
+        <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
+
+        {t.sections.map((sec, idx) => (
+          <div key={idx} style={{ marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>
+              {sec.orderNumber}
+            </div>
+            <div style={{ fontSize: 11, color: '#555', marginBottom: 4 }}>
+              Waiter: {sec.waiter}
+            </div>
+            {sec.lines.map((l, i) => (
+              <TicketLineRow key={i} line={l} currency={currency} />
+            ))}
+            <div style={{
+              borderTop: '1px dotted #bbb',
+              margin: '4px 0',
+              paddingTop: 4,
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontWeight: 600,
+              fontSize: 12,
+            }}>
+              <span>Subtotal</span>
+              <span>{fmtCurrency(sec.subtotal, currency)}</span>
+            </div>
+          </div>
+        ))}
+
+        <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15 }}>
+          <span>GRAND TOTAL</span>
+          <span>{fmtCurrency(t.totals?.grandTotal ?? 0, currency)}</span>
+        </div>
+        <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
+        {t.footer?.message && (
+          <div style={{ textAlign: 'center', fontSize: 11, marginTop: 4 }}>
+            {t.footer.message}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // -------- Single-order receipt or prep ticket --------
+  const lines = t.lines ?? [];
+  const currency = t.totals?.currency ?? 'TZS';
+
   return (
     <div className="thermal-paper">
       <div style={{ textAlign: 'center', fontWeight: 700 }}>
@@ -63,57 +160,49 @@ function ThermalTicket({ job }: { job: PrintJobFull }) {
         {t.kind === 'RECEIPT' ? 'BILL' : (t.station || '').toUpperCase()}
       </div>
       <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
-      <div>Order: <strong>{t.header.orderNumber}</strong></div>
+      {t.header.orderNumber && <div>Order: <strong>{t.header.orderNumber}</strong></div>}
       {t.context?.waiter && <div>Waiter: {t.context.waiter}</div>}
       {t.context?.table && <div>Table: {t.context.table}</div>}
       {t.context?.orderType === 'TAKEAWAY' && <div>Type: TAKEAWAY</div>}
       <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
 
-      {t.lines.map((l, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <span>
-            {l.quantity}× {l.productName}
-            {l.notes && (
-              <span style={{ display: 'block', fontSize: 11, color: '#555' }}>
-                » {l.notes}
-              </span>
-            )}
-          </span>
-          {l.lineTotal !== undefined && (
-            <span style={{ whiteSpace: 'nowrap' }}>
-              {fmtCurrency(l.lineTotal, t.totals?.currency ?? 'TZS')}
-            </span>
-          )}
-        </div>
+      {lines.map((l, i) => (
+        <TicketLineRow key={i} line={l} currency={currency} />
       ))}
 
       {t.totals && (
         <>
           <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Subtotal</span>
-            <span>{fmtCurrency(t.totals.subtotal, t.totals.currency)}</span>
-          </div>
-          {t.totals.discountAmount > 0 && (
+          {t.totals.subtotal !== undefined && (
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Discount</span>
-              <span>-{fmtCurrency(t.totals.discountAmount, t.totals.currency)}</span>
+              <span>Subtotal</span>
+              <span>{fmtCurrency(t.totals.subtotal, currency)}</span>
             </div>
           )}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            fontWeight: 700, fontSize: 15, marginTop: 4,
-          }}>
-            <span>TOTAL</span>
-            <span>{fmtCurrency(t.totals.totalAmount, t.totals.currency)}</span>
-          </div>
+          {(t.totals.discountAmount ?? 0) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Discount</span>
+              <span>-{fmtCurrency(t.totals.discountAmount!, currency)}</span>
+            </div>
+          )}
+          {t.totals.totalAmount !== undefined && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              fontWeight: 700, fontSize: 15, marginTop: 4,
+            }}>
+              <span>TOTAL</span>
+              <span>{fmtCurrency(t.totals.totalAmount, currency)}</span>
+            </div>
+          )}
         </>
       )}
 
       <div style={{ borderTop: '1px dashed #999', margin: '8px 0' }} />
-      <div style={{ textAlign: 'center', fontSize: 11 }}>
-        {new Date(t.header.createdAt).toLocaleString()}
-      </div>
+      {t.header.createdAt && (
+        <div style={{ textAlign: 'center', fontSize: 11 }}>
+          {new Date(t.header.createdAt).toLocaleString()}
+        </div>
+      )}
       {t.footer?.message && (
         <div style={{ textAlign: 'center', fontSize: 11, marginTop: 4 }}>
           {t.footer.message}
@@ -177,6 +266,11 @@ export function PrintJobsPage() {
                   {j.status}
                   {j.idempotency_key && j.idempotency_key.startsWith('bill-reprint') && (
                     <span className="reprint-badge">REPRINT</span>
+                  )}
+                  {j.idempotency_key && j.idempotency_key.startsWith('billgroup-') && (
+                    <span className="reprint-badge" style={{ background: '#dbeafe', color: '#1e40af' }}>
+                      CONSOLIDATED
+                    </span>
                   )}
                   {' · '}
                   {j.order_number}
