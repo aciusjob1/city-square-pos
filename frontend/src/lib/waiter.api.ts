@@ -23,6 +23,8 @@ export interface ProductRow {
   sku: string | null;
   sellingPrice: string;
   preparationStation: 'KITCHEN' | 'BAR' | 'NONE';
+  stockManaged: boolean;
+  available: number | null;
 }
 
 export interface OrderItemRow {

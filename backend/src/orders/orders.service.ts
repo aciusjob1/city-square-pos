@@ -9,6 +9,7 @@ import { allocateOrderNumber } from '../common/utils/order-number';
 import { buildKitchenBarTicket } from '../printers/ticket.builders';
 import { PrintersService } from '../printers/printers.service';
 import { PrintTicketType, Station } from '../printers/station.enum';
+import { StockService } from '../stock/stock.service';
 
 export interface AuthUser {
   userId: string;
@@ -31,6 +32,7 @@ export class OrdersService {
   constructor(
     private readonly db: DatabaseService,
     private readonly printers: PrintersService,
+    private readonly stock: StockService,
   ) {}
 
   async create(dto: CreateOrderDto, authUser: AuthUser) {
@@ -46,7 +48,7 @@ export class OrdersService {
     // -------- Validate all products before opening a tx --------
     const productIds = Array.from(new Set(dto.items.map((i) => i.productId)));
     const productRes = await this.db.query<ProductRow>(
-      `SELECT id, name, selling_price, preparation_station, is_active
+      `SELECT id, name, selling_price, preparation_station, is_active, stock_managed
          FROM products WHERE id = ANY($1::uuid[])`,
       [productIds],
     );
@@ -71,6 +73,14 @@ export class OrdersService {
     // -------- Main transaction --------
     try {
       const orderId = await this.db.transaction(async (client) => {
+        await this.stock.checkAvailabilityForOrder(
+          client,
+          dto.items.map((it) => {
+            const p = productMap.get(it.productId)!;
+            return { productId: p.id, quantity: it.quantity, stockManaged: (p as any).stock_managed };
+          }),
+        );
+
         const orderNumber = await allocateOrderNumber(client);
 
         // Build order_items with server-authoritative prices and station snapshots
@@ -332,7 +342,7 @@ export class OrdersService {
     // -------- Validate all products before opening a tx --------
     const productIds = Array.from(new Set(dto.items.map((i) => i.productId)));
     const productRes = await this.db.query<ProductRow>(
-      `SELECT id, name, selling_price, preparation_station, is_active
+      `SELECT id, name, selling_price, preparation_station, is_active, stock_managed
          FROM products WHERE id = ANY($1::uuid[])`,
       [productIds],
     );
@@ -385,6 +395,21 @@ export class OrdersService {
         if (authUser.role === 'WAITER' && order.waiter_id !== authUser.userId) {
           throw new ForbiddenException('This order belongs to another waiter.');
         }
+
+        await this.stock.checkAvailabilityForOrder(
+
+          client,
+
+          dto.items.map((it) => {
+
+            const p = productMap.get(it.productId)!;
+
+            return { productId: p.id, quantity: it.quantity, stockManaged: (p as any).stock_managed };
+
+          }),
+
+        );
+
 
         // Insert the batch marker FIRST. The PK makes concurrent retries safe:
         // the second caller's INSERT throws 23505 before touching order_items.

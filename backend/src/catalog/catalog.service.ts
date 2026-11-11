@@ -23,10 +23,20 @@ export class CatalogService {
 
   async products() {
     const r = await this.db.query(
-      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station, reorder_level, stock_managed
-         FROM products
-        WHERE is_active = true
-        ORDER BY category_id ASC, name ASC`,
+      `SELECT p.id, p.category_id, p.name, p.sku, p.selling_price, p.cost_price,
+              p.preparation_station, p.reorder_level, p.stock_managed,
+              CASE WHEN p.stock_managed THEN
+                COALESCE((SELECT SUM(quantity_change) FROM stock_movements
+                           WHERE product_id = p.id), 0)
+              - COALESCE((SELECT SUM(oi.quantity) FROM order_items oi
+                            JOIN orders o ON o.id = oi.order_id
+                           WHERE oi.product_id = p.id
+                             AND o.cancelled_at IS NULL
+                             AND o.closed_at   IS NULL), 0)
+              ELSE NULL END AS available
+         FROM products p
+        WHERE p.is_active = true
+        ORDER BY p.category_id ASC, p.name ASC`,
     );
     return {
       products: r.rows.map((p) => ({
@@ -39,6 +49,7 @@ export class CatalogService {
         preparationStation: p.preparation_station,
         reorderLevel: p.reorder_level,
         stockManaged: p.stock_managed,
+        available: p.available === null ? null : Number(p.available),
       })),
     };
   }

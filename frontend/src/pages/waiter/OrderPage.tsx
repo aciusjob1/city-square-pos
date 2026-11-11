@@ -186,6 +186,11 @@ export function OrderPage() {
         <div className="product-list">
           {productsForCategory.map((p) => {
             const qty = cart[p.id] ?? 0;
+            const available = p.available ?? 0;
+            const isManaged = p.stockManaged === true;
+            const outOfStock = isManaged && available <= 0;
+            const limitReached = isManaged && qty >= available;
+            const canIncrement = !outOfStock && !limitReached;
             return (
               <div className="product-card" key={p.id}>
                 <div className="info">
@@ -202,6 +207,7 @@ export function OrderPage() {
                   <button
                     aria-label={`Increase ${p.name}`}
                     onClick={() => setQty(p.id, qty + 1)}
+                    disabled={!canIncrement}
                   >+</button>
                 </div>
               </div>
