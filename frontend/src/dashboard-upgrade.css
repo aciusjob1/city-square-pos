@@ -1,0 +1,206 @@
+/* Shared responsive dashboard polish for staff, waiter, cashier and kitchen views. */
+:root {
+  --dashboard-width: 1440px;
+  --dashboard-gap: clamp(14px, 2vw, 24px);
+}
+
+.page,
+.cashier-page,
+.kitchen-page,
+.manager-page {
+  width: min(100% - 32px, var(--dashboard-width));
+  margin-inline: auto;
+}
+
+.page,
+.cashier-page,
+.kitchen-page,
+.manager-page {
+  padding-block: clamp(20px, 3vw, 36px);
+}
+
+.cashier-header,
+.kitchen-header,
+.manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dashboard-gap);
+  padding: clamp(18px, 2.6vw, 30px);
+  margin-bottom: var(--dashboard-gap);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff 0%, #f8fbff 100%);
+  box-shadow: 0 8px 26px rgb(15 23 42 / 5%);
+}
+
+.cashier-header h1,
+.kitchen-header h1,
+.manager-header h1,
+.waiter-dashboard h1 {
+  margin: 0;
+  color: var(--text, #111827);
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+  letter-spacing: -0.035em;
+}
+
+.cashier-subtitle,
+.kitchen-subtitle,
+.manager-header .subtitle,
+.waiter-dashboard .subtitle {
+  margin-top: 5px;
+  color: var(--text-muted, #6b7280);
+}
+
+.cashier-refresh,
+.kitchen-refresh,
+.manager-refresh,
+.dashboard-action {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 650;
+  transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.cashier-refresh:hover:not(:disabled),
+.kitchen-refresh:hover:not(:disabled),
+.manager-refresh:hover:not(:disabled),
+.dashboard-action:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.cashier-refresh:active:not(:disabled),
+.kitchen-refresh:active:not(:disabled),
+.manager-refresh:active:not(:disabled),
+.dashboard-action:active:not(:disabled) { transform: translateY(1px); }
+
+.cashier-tabs,
+.manager-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px;
+  margin-bottom: var(--dashboard-gap);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.cashier-tabs button,
+.manager-tab {
+  min-height: 42px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.cashier-list,
+.kitchen-grid,
+.manager-kpi-grid,
+.manager-quick-links {
+  gap: var(--dashboard-gap);
+}
+
+.cashier-row,
+.kitchen-card,
+.kpi-card,
+.manager-quick-card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 5%);
+}
+
+.kitchen-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+}
+
+.kitchen-card {
+  padding: clamp(16px, 2vw, 24px);
+  background: #fff;
+}
+
+.kitchen-items { line-height: 1.65; }
+
+.manager-kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}
+
+.kpi-card { padding: 20px; background: #fff; }
+.kpi-value { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+.manager-section {
+  padding: clamp(16px, 2vw, 24px);
+  margin-block: var(--dashboard-gap);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 4%);
+}
+
+.manager-section h2 { margin-top: 0; }
+.manager-table { width: 100%; }
+.manager-table th { position: sticky; top: 0; z-index: 1; background: #f8fafc; }
+.manager-table td,
+.manager-table th { padding: 12px 14px; }
+
+.waiter-dashboard .waiter-dashboard-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--dashboard-gap);
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.waiter-dashboard .takeaway-cta { margin: 0 0 20px; }
+.waiter-dashboard .tables-grid { margin-top: 18px; }
+.waiter-dashboard .table-card { min-height: 126px; border-radius: 14px; }
+
+.cashier-search { margin-block: var(--dashboard-gap); }
+.cashier-search input,
+.manager-date-picker input {
+  min-height: 46px;
+  border-radius: 10px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 45%);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .page,
+  .cashier-page,
+  .kitchen-page,
+  .manager-page {
+    width: min(100% - 24px, var(--dashboard-width));
+    padding-block: 16px;
+  }
+
+  .cashier-header,
+  .kitchen-header,
+  .manager-header { align-items: flex-start; }
+
+  .cashier-header button,
+  .kitchen-header button,
+  .manager-header button { flex-shrink: 0; }
+
+  .manager-section { overflow-x: auto; }
+  .manager-table { min-width: 520px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

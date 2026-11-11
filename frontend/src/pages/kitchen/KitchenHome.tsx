@@ -3,11 +3,12 @@ import { useAuth } from '../../auth/AuthContext';
 import { listKitchenOrders } from '../../lib/kitchen.api';
 import type { KitchenOrder } from '../../lib/kitchen.api';
 import './KitchenHome.css';
+import '../../dashboard-upgrade.css';
 
 const POLL_INTERVAL_MS = 10_000;
 
 function ageSeconds(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
 }
 
 function formatAge(secs: number): string {
@@ -33,111 +34,91 @@ export function KitchenHome() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [, forceTick] = useState(0);
-
-  // Prevent overlapping polls: only one in-flight request at a time.
   const inFlightRef = useRef(false);
 
   async function fetchOrders() {
-    if (inFlightRef.current) return;      // skip if a request is already running
+    if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
       const res = await listKitchenOrders();
       if (!res.ok || !res.data) {
-        // Preserve existing orders. Show error. Do NOT bump lastUpdated.
         setError(res.errorMessage ?? 'Failed to load kitchen orders');
         return;
       }
       setError(null);
       setOrders(res.data.orders);
       setLastUpdated(new Date());
+    } catch {
+      setError('Unable to connect to the server. Existing orders are kept on screen.');
     } finally {
       inFlightRef.current = false;
     }
   }
 
-  // Initial fetch + 10s poll
   useEffect(() => {
-    fetchOrders();
-    const poll = setInterval(fetchOrders, POLL_INTERVAL_MS);
-    return () => clearInterval(poll);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void fetchOrders();
+    const poll = window.setInterval(() => { void fetchOrders(); }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(poll);
   }, []);
 
-  // Local 1s tick so waiting-time stays live between polls
   useEffect(() => {
-    const tick = setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => clearInterval(tick);
+    const tick = window.setInterval(() => forceTick((n) => n + 1), 1000);
+    return () => window.clearInterval(tick);
   }, []);
 
   const lastUpdatedLabel = lastUpdated
     ? `Updated ${formatAge(ageSeconds(lastUpdated.toISOString()))} ago`
-    : 'Not yet updated';
+    : 'Waiting for first update';
 
   return (
-    <div className="kitchen-page">
-      <div className="kitchen-header">
+    <main className="kitchen-page">
+      <header className="kitchen-header">
         <div>
-          <h1>Kitchen</h1>
-          <p className="kitchen-subtitle">
-            {user?.fullName} · {lastUpdatedLabel}
-          </p>
+          <h1>Kitchen display</h1>
+          <p className="kitchen-subtitle">{user?.fullName} · {lastUpdatedLabel} · Refreshes every 10 seconds</p>
         </div>
-        <button className="kitchen-refresh" onClick={fetchOrders}>
-          Refresh
+        <button className="kitchen-refresh" type="button" onClick={() => void fetchOrders()} disabled={inFlightRef.current}>
+          Refresh now
         </button>
-      </div>
+      </header>
 
-      {error && <div className="kitchen-error">{error}</div>}
-
-      {!orders && !error && <p className="muted">Loading…</p>}
-      {orders && orders.length === 0 && (
-        <p className="muted">No pending orders.</p>
-      )}
-
+      {error && <div className="kitchen-error" role="alert">{error}</div>}
+      {!orders && !error && <p className="muted" role="status">Loading kitchen orders…</p>}
+      {orders && orders.length === 0 && <section className="card"><h2>All caught up</h2><p className="muted">New kitchen orders will appear here.</p></section>}
       {orders && orders.length > 0 && (
-        <div className="kitchen-grid">
-          {orders.map((o) => {
-            const secs = ageSeconds(o.serverCreatedAt);
+        <section className="kitchen-grid" aria-label={`${orders.length} active kitchen orders`}>
+          {orders.map((order) => {
+            const secs = ageSeconds(order.serverCreatedAt);
             return (
-              <div key={o.id} className="kitchen-card">
-                <div className="kitchen-card-header">
+              <article key={order.id} className="kitchen-card">
+                <header className="kitchen-card-header">
                   <div>
-                    <div className="kitchen-order-number">{o.orderNumber}</div>
-                    <div className="kitchen-location">
-                      {o.tableName ?? 'Takeaway'}
-                    </div>
-                    <div className="kitchen-waiter">
-                      {o.waiterFullName}
-                    </div>
+                    <div className="kitchen-order-number">{order.orderNumber}</div>
+                    <div className="kitchen-location">{order.tableName ?? 'Takeaway'}</div>
+                    <div className="kitchen-waiter">{order.waiterFullName}</div>
                   </div>
-                  <div className={`kitchen-age kitchen-age-${ageClass(secs)}`}>
+                  <div className={`kitchen-age kitchen-age-${ageClass(secs)}`} aria-label={`Waiting ${formatAge(secs)}`}>
                     {formatAge(secs)}
                   </div>
-                </div>
-
+                </header>
                 <div className="kitchen-time-sent">
-                  Sent {formatHHMM(o.serverCreatedAt)}
-                  {o.status === 'PREPARING' && (
-                    <span className="kitchen-badge-preparing"> · Preparing</span>
-                  )}
+                  Sent {formatHHMM(order.serverCreatedAt)}
+                  {order.status === 'PREPARING' && <span className="kitchen-badge-preparing"> · Preparing</span>}
                 </div>
-
                 <ul className="kitchen-items">
-                  {o.items.map((it) => (
-                    <li key={it.id}>
-                      <span className="kitchen-qty">{it.quantity}×</span>
-                      <span>{it.productName}</span>
-                      {it.notes && (
-                        <span className="kitchen-note"> — {it.notes}</span>
-                      )}
+                  {order.items.map((item) => (
+                    <li key={item.id}>
+                      <span className="kitchen-qty">{item.quantity}×</span>
+                      <span>{item.productName}</span>
+                      {item.notes && <span className="kitchen-note"> — {item.notes}</span>}
                     </li>
                   ))}
                 </ul>
-              </div>
+              </article>
             );
           })}
-        </div>
+        </section>
       )}
-    </div>
+    </main>
   );
 }
