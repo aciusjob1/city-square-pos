@@ -1,84 +1,207 @@
 # City Square POS
 
-City Square POS is a restaurant point-of-sale application with a NestJS API, React/Vite web client, and PostgreSQL database.
+City Square POS is a restaurant point-of-sale system built with a NestJS API, React/Vite frontend, and PostgreSQL database. It supports role-based workflows for waiters, cashiers, managers/admins, kitchen staff, and order/stock operations.
 
-## Current application status
+This project is designed to run on a normal PC, with a local PostgreSQL database and a local backend API, while the frontend runs in a browser or can later be packaged into desktop shortcuts/app launchers. The system is meant for a restaurant environment where staff can log in and do the daily POS work, while waiters can use a dedicated PIN-based login.
 
-The repository currently contains a web application and development setup. The staff and waiter login screens already exist. Two separate frontend build modes are now available so the clients can later be packaged as two Windows applications:
+## What the system does
 
-- **Staff client** opens on the staff login (`/login`).
-- **Waiter client** opens on the waiter PIN login (`/w/login`) and only accepts a waiter role in its client session.
+- Staff login with username and password
+- Waiter login with a 4-digit PIN
+- Table and order management
+- Menu/catalog management
+- Stock tracking for managed products
+- Bill/receipt request flow
+- Kitchen/bar ticket printing flow
+- Roles and permissions for different users
+- Manager/admin tools for users, categories, products, settings, and stock
 
-These are separate client builds, **not yet standalone Windows installers**. The waiter mode is a startup/UX restriction, not a security boundary. The API must continue enforcing authorization for every privileged action.
+## Repository structure
 
-## Requirements
+```text
+backend/      NestJS API and database logic
+frontend/     React client and UI screens
+database/     database artifacts and migrations
+README.md     project overview and local setup
+```
 
-- Node.js compatible with the lockfiles and package manifests.
-- PostgreSQL with the repository migrations applied.
-- A configured backend environment file (do not commit secrets).
+## How to access and set it up on any PC
 
-## Local development
+### 1. Install Git
 
-1. Configure PostgreSQL and create the application database/user.
-2. Create `backend/.env` with at least:
+On Windows, install Git from the official site and then open PowerShell or Command Prompt.
 
-   ```dotenv
-   DATABASE_URL=postgres://<user>:<password>@localhost:5432/<database>
-   PORT=3000
-   JWT_SECRET=<a cryptographically random secret of at least 32 bytes>
-   JWT_EXPIRES_IN=12h
-   ```
+### 2. Clone the project
 
-   Never use a default or example JWT secret for a real deployment. Keep `.env` out of version control.
-3. Install and start the backend:
+```powershell
+git clone https://github.com/aciusjob1/city-square-pos.git
+cd city-square-pos
+```
 
-   ```bash
-   cd backend
-   npm ci
-   npm run migrate
-   npm run seed
-   npm run start:dev
-   ```
-4. In another terminal, install and start one frontend mode:
+If you need the latest branch:
 
-   ```bash
-   cd frontend
-   npm ci
-   npm run dev:staff
-   ```
+```powershell
+git fetch origin
+git switch feature/windows-installer-security-hardening
+git pull origin feature/windows-installer-security-hardening
+```
 
-   Or run `npm run dev:waiter` for the waiter PIN terminal. The Vite development server listens on port 5173 and proxies `/api` requests to the local backend on port 3000.
+### 3. Install PostgreSQL
 
-Use the repository's seed setup only for development. Change seeded credentials before any production use.
+Install PostgreSQL locally and create a database for the app.
 
-## Build both client variants
+Example:
 
-From `frontend/`:
+```sql
+CREATE DATABASE citysquare;
+CREATE USER citysquare WITH PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE citysquare TO citysquare;
+```
 
-```bash
-npm ci
+### 4. Configure environment variables
+
+Create a `backend/.env` file. This file is local to your machine and should never be committed to Git.
+
+```dotenv
+DATABASE_URL=postgres://citysquare:your_secure_password@localhost:5432/citysquare
+PORT=3000
+JWT_SECRET=replace_me_with_a_strong_random_secret
+JWT_EXPIRES_IN=12h
+```
+
+Recommended security note:
+- Use a long random secret value, not a default value.
+- Keep `.env` files outside the public project folder if possible.
+- Never share secrets in screenshots, chats, or source control.
+
+### 5. Install backend dependencies and run migrations
+
+```powershell
+cd backend
+npm install
+npm run migrate
+npm run seed
+npm run start:dev
+```
+
+This starts the backend API on:
+
+```text
+http://localhost:3000/api
+```
+
+### 6. Install frontend dependencies and start the app
+
+Open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev:staff
+```
+
+This starts the staff web app on:
+
+```text
+http://localhost:5173
+```
+
+For the waiter client:
+
+```powershell
+cd frontend
+npm run dev:waiter
+```
+
+The waiter client opens the waiter PIN login and is meant to be used by waiters only.
+
+## Security and access model
+
+The system uses a role-based access model.
+
+- Staff users sign in using username + password.
+- Waiters sign in using their PIN.
+- The backend enforces authorization on protected API routes.
+- The frontend route protections are optional UX restrictions only and should not be treated as the real security boundary.
+
+### Recommended rules
+
+- Do not use the default seeded credentials in production.
+- Use separate strong accounts for manager/admin, cashier, waiter, and kitchen users.
+- Use a unique JWT secret per environment.
+- Keep the database and backend on a secure machine or within a trusted local network.
+- Do not expose your local development server to the public internet.
+- Use HTTPS if the system is accessed over a network.
+
+## Future Windows app installation design
+
+The future target is to create a Windows installer that installs two separate desktop launchers:
+
+- City Square POS - Staff
+- City Square POS - Waiter
+
+These two icons will point to the same backend, but start different frontend modes:
+
+- Staff launcher starts the staff login page
+- Waiter launcher starts the waiter PIN page
+
+This keeps the same backend/database but gives different entry points for different user groups.
+
+The current repo does not yet include the final installer or desktop packaging. It still needs a proper Windows packaging step, app startup configuration, and validation on actual Windows hardware.
+
+## Build checks
+
+These are useful commands while developing and validating the project.
+
+### Backend
+
+```powershell
+cd backend
+npm install
+npm run build
+```
+
+### Frontend
+
+```powershell
+cd frontend
+npm install
 npm run build:staff
 npm run build:waiter
 ```
 
-The outputs are `frontend/dist-staff/` and `frontend/dist-waiter/`. Each build is a static web client and needs to be served by a web server/reverse proxy configured to route `/api` to the backend and to provide SPA fallback to `index.html`.
+## Important operational notes
 
-The current repository does **not** yet include an Electron shell, Windows service setup, printer driver implementation, or an installer that creates two installed applications/shortcuts. The builds above are preparation for that installer work, not a claim that the installer is complete. Physical printing must be validated with the actual printer models before deployment.
+- The repository is still in active development.
+- Physical printer support must be tested on real machines because printer drivers may need special handling.
+- Database backups and proper environment management are important before deployment.
+- The codebase has not been fully load-tested here, so any user capacity claim should be based on the actual hardware and usage pattern.
 
-## Security notes
+## Troubleshooting
 
-- Never put a GitHub token, database password, JWT secret, or other credential in source control, screenshots, issue comments, or chat. If a token was shared, revoke it and create a replacement immediately.
-- Use HTTPS for clients connecting over a network; do not expose the development server directly to the internet.
-- The backend, not frontend routes or build mode, is the authorization boundary.
-- Use strong, unique staff passwords, restrict database/network access, and maintain tested backups.
-- PINs have only 10,000 possible values; use them only as a waiter convenience credential with strict server-side throttling and appropriate physical access controls. Prefer passwords for privileged accounts.
+### Backend will not start
 
-## Tests and operational readiness
+Check:
+- `backend/.env` is present and valid
+- PostgreSQL is installed and running
+- database user and password are correct
+- `npm install` completed successfully
 
-Backend build: `cd backend && npm ci && npm run build`.
+### Frontend cannot connect to API
 
-Frontend build/lint: `cd frontend && npm ci && npm run build:staff && npm run build:waiter && npm run lint`.
+Check:
+- backend is running on port 3000
+- Vite dev server is running on port 5173
+- there is no firewall issue blocking local calls
 
-A successful compile is not a full production certification. The repository has not been load-tested here; concurrent capacity depends on the PC/server CPU, memory, PostgreSQL settings/storage, network, printer hardware, and workload. Measure it with representative concurrent order and screen-refresh traffic before selecting a supported user target.
+### Database errors
 
-Before a real Windows rollout, complete and test the Windows installer and printer integration, review authentication/rate limiting and backup/restore procedures, then run end-to-end and concurrency tests on the target hardware.
+Check:
+- database exists
+- user has privileges
+- migrations were applied
+- connection string matches the real database and password
+
+## Final note
+
+This README explains the system, how to access the code, how to set it up on a PC, and the architecture for a future two-app Windows install. It should be kept current as the project evolves.
