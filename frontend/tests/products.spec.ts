@@ -185,4 +185,97 @@ test.describe('Products CRUD (manager)', () => {
     });
     expect(delRes.status()).toBe(403);
   });
+
+
+  test('products default to stock_managed false', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const res = await request.get(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json();
+    expect(body.products.length).toBeGreaterThan(0);
+    for (const p of body.products) {
+      expect(p.stockManaged).toBe(false);
+    }
+  });
+
+  test('manager can mark product as stock_managed', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const catRes = await request.get(`${API}/categories`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const catId = (await catRes.json()).categories[0].id;
+    const created = await request.post(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name: `Test-Prod-Managed-${Date.now()}`,
+        categoryId: catId,
+        sellingPrice: 100,
+        preparationStation: 'KITCHEN',
+      },
+    });
+    const prod = await created.json();
+
+    try {
+      const patched = await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: true },
+      });
+      expect(patched.status()).toBe(200);
+      const updated = await patched.json();
+      expect(updated.stockManaged).toBe(true);
+    } finally {
+      try {
+        execSync(`psql -h 127.0.0.1 -U citysquare -d citysquare -c "DELETE FROM products WHERE id = '${prod.id}';"`, { stdio: 'ignore' });
+      } catch {}
+    }
+  });
+
+  test('manager can unmark product as stock_managed', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const catRes = await request.get(`${API}/categories`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const catId = (await catRes.json()).categories[0].id;
+    const created = await request.post(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name: `Test-Prod-Unmanaged-${Date.now()}`,
+        categoryId: catId,
+        sellingPrice: 100,
+        preparationStation: 'KITCHEN',
+        stockManaged: true,
+      },
+    });
+    const prod = await created.json();
+
+    try {
+      const patched = await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: false },
+      });
+      expect(patched.status()).toBe(200);
+      const updated = await patched.json();
+      expect(updated.stockManaged).toBe(false);
+    } finally {
+      try {
+        execSync(`psql -h 127.0.0.1 -U citysquare -d citysquare -c "DELETE FROM products WHERE id = '${prod.id}';"`, { stdio: 'ignore' });
+      } catch {}
+    }
+  });
+
+  test('stockManaged must be boolean', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const list = await request.get(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const prod = (await list.json()).products[0];
+
+    const res = await request.patch(`${API}/products/${prod.id}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { stockManaged: 'yes' },
+    });
+    expect(res.status()).toBe(400);
+  });
+
 });

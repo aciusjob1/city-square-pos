@@ -1,5 +1,5 @@
 import {
-  IsEnum, IsNumber, IsOptional, IsString, IsUUID,
+  IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID,
   MaxLength, Min, MinLength,
 } from 'class-validator';
 import { Station } from '../../printers/station.enum';
@@ -29,4 +29,8 @@ export class CreateProductDto {
 
   @IsEnum(Station)
   preparationStation: Station;
+
+  @IsOptional()
+  @IsBoolean()
+  stockManaged?: boolean;
 }

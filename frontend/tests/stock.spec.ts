@@ -46,7 +46,9 @@ test.describe('Stock (manager)', () => {
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
-    expect(body.balances.length).toBe(11);
+    // After 8.8c-2, balances are filtered to stock_managed = true.
+    // Default state = 0 managed products.
+    expect(body.balances.length).toBe(0);
     expect(body.balances.every((r: any) => ['OK', 'LOW', 'OUT'].includes(r.status))).toBe(true);
     expect(body.balances.every((r: any) => typeof r.balance === 'number')).toBe(true);
   });
@@ -55,37 +57,66 @@ test.describe('Stock (manager)', () => {
     const token = await loginAs(request, 'manager', 'manager123');
     const productId = await findProductId(request, token, 'Samaki');
 
-    const restock = await request.post(`${API}/stock/restock`, {
+    // Enable stock_managed so product appears in /stock/balances
+    await request.patch(`${API}/products/${productId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { productId, quantity: 100, notes: 'Test-restock-1' },
+      data: { stockManaged: true },
     });
-    expect([200, 201]).toContain(restock.status());
 
-    const balances = await request.get(`${API}/stock/balances`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const body = await balances.json();
-    const samaki = body.balances.find((r: any) => r.productId === productId);
-    expect(samaki.balance).toBeGreaterThanOrEqual(100);
-    expect(samaki.status).toBe('OK');
+    try {
+      const restock = await request.post(`${API}/stock/restock`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { productId, quantity: 100, notes: 'Test-restock-1' },
+      });
+      expect([200, 201]).toContain(restock.status());
+
+      const balances = await request.get(`${API}/stock/balances`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await balances.json();
+      const samaki = body.balances.find((r: any) => r.productId === productId);
+      expect(samaki.balance).toBeGreaterThanOrEqual(100);
+      expect(samaki.status).toBe('OK');
+    } finally {
+      await request.patch(`${API}/products/${productId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: false },
+      });
+      try {
+        execSync(`psql -h 127.0.0.1 -U citysquare -d citysquare -c "DELETE FROM stock_movements WHERE notes = 'Test-restock-1';"`, { stdio: 'ignore' });
+      } catch {}
+    }
   });
 
   test('manager can update reorder level', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
     const productId = await findProductId(request, token, 'Ugali');
 
-    const patch = await request.patch(`${API}/products/${productId}`, {
+    // Enable stock_managed so product appears in /stock/balances
+    await request.patch(`${API}/products/${productId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { reorderLevel: 50 },
+      data: { stockManaged: true },
     });
-    expect(patch.status()).toBe(200);
 
-    const balances = await request.get(`${API}/stock/balances`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const body = await balances.json();
-    const ugali = body.balances.find((r: any) => r.productId === productId);
-    expect(ugali.reorderLevel).toBe(50);
+    try {
+      const patch = await request.patch(`${API}/products/${productId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { reorderLevel: 50 },
+      });
+      expect(patch.status()).toBe(200);
+
+      const balances = await request.get(`${API}/stock/balances`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await balances.json();
+      const ugali = body.balances.find((r: any) => r.productId === productId);
+      expect(ugali.reorderLevel).toBe(50);
+    } finally {
+      await request.patch(`${API}/products/${productId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: false, reorderLevel: 0 },
+      });
+    }
   });
 
   test('negative reorder level rejected', async ({ request }) => {
@@ -103,10 +134,10 @@ test.describe('Stock (manager)', () => {
     const token = await loginAs(request, 'manager', 'manager123');
     const productId = await findProductId(request, token, 'Kuku');
 
-    // Set reorder level to 10, restock 5 → LOW
+    // Enable stock_managed + set reorder level to 10, restock 5 → LOW
     await request.patch(`${API}/products/${productId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { reorderLevel: 10 },
+      data: { stockManaged: true, reorderLevel: 10 },
     });
     await request.post(`${API}/stock/restock`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -130,6 +161,12 @@ test.describe('Stock (manager)', () => {
     });
     const low2Body = await low2.json();
     expect(low2Body.products.some((p: any) => p.productId === productId)).toBe(false);
+
+    // Cleanup: reset stockManaged + reorderLevel
+    await request.patch(`${API}/products/${productId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { stockManaged: false, reorderLevel: 0 },
+    });
   });
 
   test('waiter cannot access stock endpoints', async ({ request }) => {
@@ -146,4 +183,66 @@ test.describe('Stock (manager)', () => {
     });
     expect(restock.status()).toBe(403);
   });
+
+
+  test('stock/balances filters to stock_managed = true', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const list = await request.get(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const prod = (await list.json()).products[0];
+
+    try {
+      await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: true },
+      });
+
+      const balances = await request.get(`${API}/stock/balances`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await balances.json();
+      expect(body.balances.length).toBe(1);
+      expect(body.balances[0].productId).toBe(prod.id);
+    } finally {
+      await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: false },
+      });
+    }
+  });
+
+  test('stock/low-stock filters to stock_managed = true', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const list = await request.get(`${API}/products`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const prod = (await list.json()).products[0];
+
+    try {
+      await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: true, reorderLevel: 10 },
+      });
+      await request.post(`${API}/stock/restock`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { productId: prod.id, quantity: 3, notes: 'Test-lowstock-managed' },
+      });
+
+      const low = await request.get(`${API}/stock/low-stock`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await low.json();
+      expect(body.products.some((p: any) => p.productId === prod.id)).toBe(true);
+    } finally {
+      await request.patch(`${API}/products/${prod.id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { stockManaged: false, reorderLevel: 0 },
+      });
+      try {
+        execSync(`psql -h 127.0.0.1 -U citysquare -d citysquare -c "DELETE FROM stock_movements WHERE notes LIKE 'Test-lowstock-managed%';"`, { stdio: 'ignore' });
+      } catch {}
+    }
+  });
+
 });

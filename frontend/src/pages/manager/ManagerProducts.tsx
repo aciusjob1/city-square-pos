@@ -31,6 +31,7 @@ export function ManagerProducts() {
   const [sellingPrice, setSellingPrice] = useState('0');
   const [costPrice, setCostPrice] = useState('0');
   const [station, setStation] = useState<Station>('KITCHEN');
+  const [stockManaged, setStockManaged] = useState(false);
 
   async function load() {
     const [prodRes, catRes] = await Promise.all([listProductsFull(), listCategoriesFull()]);
@@ -53,6 +54,7 @@ export function ManagerProducts() {
     setName(''); setSku('');
     setSellingPrice('0'); setCostPrice('0');
     setStation('KITCHEN');
+    setStockManaged(false);
   }
 
   function beginAdd() {
@@ -60,6 +62,7 @@ export function ManagerProducts() {
     setName(''); setSku('');
     setSellingPrice('0'); setCostPrice('0');
     setStation('KITCHEN');
+    setStockManaged(false);
     if (!categoryId && categories[0]) setCategoryId(categories[0].id);
   }
 
@@ -71,6 +74,7 @@ export function ManagerProducts() {
     setSellingPrice(String(parseFloat(p.sellingPrice)));
     setCostPrice(String(parseFloat(p.costPrice)));
     setStation(p.preparationStation as Station);
+    setStockManaged(p.stockManaged ?? false);
   }
 
   async function submit() {
@@ -85,6 +89,7 @@ export function ManagerProducts() {
       sellingPrice: parseFloat(sellingPrice) || 0,
       costPrice: parseFloat(costPrice) || 0,
       preparationStation: station,
+      stockManaged,
     };
     const res = edit.kind === 'add'
       ? await createProduct(payload)
@@ -147,6 +152,14 @@ export function ManagerProducts() {
             <select value={station} onChange={(e) => setStation(e.target.value as Station)}>
               {STATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+          </label>
+          <label style={{ flexDirection: 'row', alignItems: 'center', gap: '6px' }}>
+            <input
+              type="checkbox"
+              checked={stockManaged}
+              onChange={(e) => setStockManaged(e.target.checked)}
+            />
+            Stock managed
           </label>
           <label>Sell
             <input type="number" min={0} step="0.01" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} style={{ width: '90px' }} />

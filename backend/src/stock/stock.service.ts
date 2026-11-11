@@ -25,7 +25,7 @@ export class StockService {
               COALESCE(SUM(sm.quantity_change), 0)::int AS balance
          FROM products p
     LEFT JOIN stock_movements sm ON sm.product_id = p.id
-        WHERE p.is_active = true
+        WHERE p.is_active = true AND p.stock_managed = true
      GROUP BY p.id, p.name, p.reorder_level
      ORDER BY p.name ASC`,
     );
@@ -46,7 +46,7 @@ export class StockService {
               COALESCE(SUM(sm.quantity_change), 0)::int AS balance
          FROM products p
     LEFT JOIN stock_movements sm ON sm.product_id = p.id
-        WHERE p.is_active = true
+        WHERE p.is_active = true AND p.stock_managed = true
      GROUP BY p.id, p.name, p.reorder_level
        HAVING p.reorder_level > 0
           AND COALESCE(SUM(sm.quantity_change), 0) < p.reorder_level

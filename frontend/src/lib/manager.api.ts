@@ -45,6 +45,8 @@ export interface ProductRow {
   costPrice: string;
   preparationStation: 'KITCHEN' | 'BAR' | 'NONE';
   isActive?: boolean;
+  reorderLevel?: number;
+  stockManaged?: boolean;
 }
 
 export async function listProductsFull() {
@@ -73,6 +75,8 @@ export async function updateProduct(id: string, input: {
   sellingPrice?: number;
   costPrice?: number;
   preparationStation?: 'KITCHEN' | 'BAR' | 'NONE';
+  reorderLevel?: number;
+  stockManaged?: boolean;
 }) {
   return apiFetch<ProductRow>(`/products/${id}`, {
     method: 'PATCH',

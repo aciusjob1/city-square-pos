@@ -23,7 +23,7 @@ export class CatalogService {
 
   async products() {
     const r = await this.db.query(
-      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station, reorder_level
+      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station, reorder_level, stock_managed
          FROM products
         WHERE is_active = true
         ORDER BY category_id ASC, name ASC`,
@@ -38,6 +38,7 @@ export class CatalogService {
         costPrice: p.cost_price,
         preparationStation: p.preparation_station,
         reorderLevel: p.reorder_level,
+        stockManaged: p.stock_managed,
       })),
     };
   }
@@ -125,6 +126,7 @@ export class CatalogService {
     sellingPrice: number;
     costPrice?: number;
     preparationStation: string;
+    stockManaged?: boolean;
   }) {
     const name = input.name.trim();
     if (!name) throw new BadRequestException('Product name is required');
@@ -140,10 +142,10 @@ export class CatalogService {
 
     try {
       const r = await this.db.query(
-        `INSERT INTO products (name, sku, category_id, selling_price, cost_price, preparation_station)
-         VALUES ($1, $2, $3, $4, $5, $6::"Station")
-         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active`,
-        [name, sku, input.categoryId, input.sellingPrice, input.costPrice ?? 0, input.preparationStation],
+        `INSERT INTO products (name, sku, category_id, selling_price, cost_price, preparation_station, stock_managed)
+         VALUES ($1, $2, $3, $4, $5, $6::"Station", $7)
+         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active, reorder_level, stock_managed`,
+        [name, sku, input.categoryId, input.sellingPrice, input.costPrice ?? 0, input.preparationStation, input.stockManaged ?? false],
       );
       const p = r.rows[0];
       return {
@@ -155,6 +157,8 @@ export class CatalogService {
         costPrice: p.cost_price,
         preparationStation: p.preparation_station,
         isActive: p.is_active,
+        reorderLevel: p.reorder_level,
+        stockManaged: p.stock_managed,
       };
     } catch (e: any) {
       if (e.code === '23505') {
@@ -172,6 +176,7 @@ export class CatalogService {
     costPrice?: number;
     preparationStation?: string;
     reorderLevel?: number;
+    stockManaged?: boolean;
   }) {
     const sets: string[] = [];
     const params: any[] = [];
@@ -207,6 +212,9 @@ export class CatalogService {
     if (input.reorderLevel !== undefined) {
       sets.push(`reorder_level = $${i++}`); params.push(input.reorderLevel);
     }
+    if (input.stockManaged !== undefined) {
+      sets.push(`stock_managed = $${i++}`); params.push(input.stockManaged);
+    }
 
     if (sets.length === 0) throw new BadRequestException('No fields to update');
     sets.push(`updated_at = now()`);
@@ -215,7 +223,7 @@ export class CatalogService {
     try {
       const r = await this.db.query(
         `UPDATE products SET ${sets.join(', ')} WHERE id = $${i} AND is_active = true
-         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active`,
+         RETURNING id, name, sku, category_id, selling_price, cost_price, preparation_station, is_active, reorder_level, stock_managed`,
         params,
       );
       if (!r.rows[0]) throw new NotFoundException('Product not found');
@@ -229,6 +237,8 @@ export class CatalogService {
         costPrice: p.cost_price,
         preparationStation: p.preparation_station,
         isActive: p.is_active,
+        reorderLevel: p.reorder_level,
+        stockManaged: p.stock_managed,
       };
     } catch (e: any) {
       if (e.code === '23505') {
