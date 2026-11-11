@@ -2,6 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import { APP_MODE, getDefaultLoginPath, getRoleHomePath } from '../app-mode';
 import { apiFetch, TOKEN_STORAGE_KEY, USER_STORAGE_KEY, EXP_STORAGE_KEY } from '../lib/api';
 import type { LoginResponse, StoredAuth, User } from '../lib/types';
 
@@ -75,8 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     expiryTimer.current = window.setTimeout(() => {
       clearAuth();
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login');
+      if (window.location.pathname !== getDefaultLoginPath()) {
+        window.location.replace(getDefaultLoginPath());
       }
     }, ms);
   }, [clearAuth]);
@@ -84,6 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const persistAuth = useCallback((payload: LoginResponse) => {
     const expiresAt = readJwtExpiry(payload.accessToken);
     if (!expiresAt) return false;
+    // The waiter terminal accepts waiter PIN sessions only. The backend still
+    // enforces endpoint roles; this check prevents a misleading UI login.
+    if (APP_MODE === 'waiter' && payload.user.role !== 'WAITER') return false;
     localStorage.setItem(TOKEN_STORAGE_KEY, payload.accessToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user));
     localStorage.setItem(EXP_STORAGE_KEY, String(expiresAt));
@@ -96,9 +100,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = loadStoredAuth();
     if (stored) {
-      setUser(stored.user);
-      setToken(stored.token);
-      scheduleExpiry(stored.expiresAt);
+      // Do not restore a non-waiter session in the dedicated waiter client.
+      let allowed = true;
+      try {
+        const storedUser = JSON.parse(localStorage.getItem(USER_STORAGE_KEY) ?? 'null') as User | null;
+        allowed = APP_MODE !== 'waiter' || storedUser?.role === 'WAITER';
+      } catch {
+        allowed = false;
+      }
+      if (allowed) {
+        setUser(stored.user);
+        setToken(stored.token);
+        scheduleExpiry(stored.expiresAt);
+      } else {
+        clearAuth();
+      }
     } else {
       clearAuth();
     }
@@ -114,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: res.errorMessage ?? 'Login failed' };
     }
     if (!persistAuth(res.data)) {
-      return { ok: false, error: 'Server returned an unparseable token' };
+      return { ok: false, error: 'This terminal only accepts waiter accounts' };
     }
     return { ok: true, error: null };
   }, [persistAuth]);
@@ -128,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: res.errorMessage ?? 'PIN login failed' };
     }
     if (!persistAuth(res.data)) {
-      return { ok: false, error: 'Server returned an unparseable token' };
+      return { ok: false, error: 'This terminal only accepts waiter accounts' };
     }
     return { ok: true, error: null };
   }, [persistAuth]);
@@ -148,12 +164,5 @@ export function useAuth(): AuthState {
 }
 
 export function homePathForRole(role: User['role']): string {
-  switch (role) {
-    case 'WAITER': return '/waiter';
-    case 'CASHIER': return '/cashier';
-    case 'MANAGER':
-    case 'ADMIN': return '/manager';
-    case 'KITCHEN': return '/kitchen';
-    default: return '/login';
-  }
+  return getRoleHomePath(role);
 }

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth, homePathForRole } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { APP_MODE, getDefaultLoginPath } from './app-mode';
 import { Nav } from './components/Nav';
 import { LoginPage } from './pages/LoginPage';
 import { WaiterLoginPage } from './pages/WaiterLoginPage';
@@ -11,7 +12,6 @@ import { PrintJobsPage } from './pages/print-jobs/PrintJobsPage';
 import { CashierHome } from './pages/cashier/CashierHome';
 import { ManagerHome } from './pages/manager/ManagerHome';
 import { ManagerLayout } from './pages/manager/ManagerLayout';
-import { ManagerPlaceholder } from './pages/manager/ManagerPlaceholder';
 import { ManagerCategories } from './pages/manager/ManagerCategories';
 import { ManagerProducts } from './pages/manager/ManagerProducts';
 import { ManagerStock } from './pages/manager/ManagerStock';
@@ -22,6 +22,7 @@ import { NotFound } from './pages/NotFound';
 
 export default function App() {
   const { user } = useAuth();
+  const defaultLoginPath = getDefaultLoginPath();
 
   return (
     <>
@@ -102,11 +103,13 @@ export default function App() {
           path="/"
           element={
             user ? <Navigate to={homePathForRole(user.role)} replace />
-                 : <Navigate to="/login" replace />
+              : <Navigate to={defaultLoginPath} replace />
           }
         />
 
-        <Route path="*" element={<NotFound />} />
+        {/* The mode chooses a convenient startup page only; backend authorization
+            remains mandatory and must never rely on this frontend setting. */}
+        <Route path="*" element={<Navigate to={APP_MODE === 'waiter' ? '/w/login' : '/login'} replace />} />
       </Routes>
     </>
   );

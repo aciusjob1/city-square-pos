@@ -5,9 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:staff": "vite --mode staff",
+    "dev:waiter": "vite --mode waiter",
     "build": "tsc -b && vite build",
+    "build:staff": "tsc -b && vite build --mode staff",
+    "build:waiter": "tsc -b && vite build --mode waiter",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:staff": "vite preview --outDir dist-staff",
+    "preview:waiter": "vite preview --outDir dist-waiter"
   },
   "dependencies": {
     "react": "^19.3.1",
