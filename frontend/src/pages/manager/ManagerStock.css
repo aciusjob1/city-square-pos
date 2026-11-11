@@ -1,0 +1,70 @@
+.manager-stock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manager-stock-header h2 {
+  margin: 0;
+}
+
+.manager-stock-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.manager-stock-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.manager-stock-low {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.manager-stock-out {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.manager-stock-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.manager-stock-inline input {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.manager-stock-inline button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.manager-stock-inline button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.manager-stock-inline button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

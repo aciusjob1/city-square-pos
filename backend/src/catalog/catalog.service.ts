@@ -23,7 +23,7 @@ export class CatalogService {
 
   async products() {
     const r = await this.db.query(
-      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station
+      `SELECT id, category_id, name, sku, selling_price, cost_price, preparation_station, reorder_level
          FROM products
         WHERE is_active = true
         ORDER BY category_id ASC, name ASC`,
@@ -37,6 +37,7 @@ export class CatalogService {
         sellingPrice: p.selling_price,
         costPrice: p.cost_price,
         preparationStation: p.preparation_station,
+        reorderLevel: p.reorder_level,
       })),
     };
   }
@@ -170,6 +171,7 @@ export class CatalogService {
     sellingPrice?: number;
     costPrice?: number;
     preparationStation?: string;
+    reorderLevel?: number;
   }) {
     const sets: string[] = [];
     const params: any[] = [];
@@ -200,7 +202,10 @@ export class CatalogService {
       sets.push(`cost_price = $${i++}`); params.push(input.costPrice);
     }
     if (input.preparationStation !== undefined) {
-      sets.push(`preparation_station = $${i++}::"Station"`); params.push(input.preparationStation);
+      sets.push(`preparation_station = ${i++}::"Station"`); params.push(input.preparationStation);
+    }
+    if (input.reorderLevel !== undefined) {
+      sets.push(`reorder_level = ${i++}`); params.push(input.reorderLevel);
     }
 
     if (sets.length === 0) throw new BadRequestException('No fields to update');

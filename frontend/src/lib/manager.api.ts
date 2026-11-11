@@ -211,3 +211,29 @@ export async function deactivatePrinter(id: string) {
   });
 }
 
+export type StockStatus = 'OK' | 'LOW' | 'OUT';
+
+export interface StockBalanceRow {
+  productId: string;
+  productName: string;
+  balance: number;
+  reorderLevel: number;
+  status: StockStatus;
+}
+
+export async function listStockBalances() {
+  return apiFetch<{ balances: StockBalanceRow[] }>('/stock/balances');
+}
+
+export async function listLowStock() {
+  return apiFetch<{ products: Array<{ productId: string; productName: string; balance: number; reorderLevel: number }> }>('/stock/low-stock');
+}
+
+export async function restockProduct(productId: string, quantity: number, notes?: string) {
+  return apiFetch<{ ok: true }>('/stock/restock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId, quantity, notes }),
+  });
+}
+

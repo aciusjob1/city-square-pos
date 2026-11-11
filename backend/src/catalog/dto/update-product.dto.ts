@@ -1,5 +1,5 @@
 import {
-  IsEnum, IsNumber, IsOptional, IsString, IsUUID,
+  IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID,
   MaxLength, Min, MinLength,
 } from 'class-validator';
 import { Station } from '../../printers/station.enum';
@@ -33,4 +33,9 @@ export class UpdateProductDto {
   @IsOptional()
   @IsEnum(Station)
   preparationStation?: Station;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  reorderLevel?: number;
 }

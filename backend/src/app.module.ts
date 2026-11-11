@@ -11,6 +11,7 @@ import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { TablesModule } from './tables/tables.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { SettingsModule } from './settings/settings.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SettingsModule } from './settings/settings.module';
     TablesModule,
     CatalogModule,
     SettingsModule,
+    StockModule,
   ],
 })
 export class AppModule {}
