@@ -172,6 +172,7 @@ export interface PrinterRow {
   port: number;
   station: 'KITCHEN' | 'BAR' | 'NONE';
   isActive: boolean;
+  type: 'NETWORK' | 'OS';
 }
 
 export async function getSettings() {

@@ -166,6 +166,7 @@ export function ManagerSettings() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>IP</th>
                 <th>Port</th>
                 <th>Station</th>
@@ -177,6 +178,7 @@ export function ManagerSettings() {
               {printers.map((p) => (
                 <tr key={p.id}>
                   <td>{p.name}</td>
+                  <td>{p.type}</td>
                   <td>{p.ipAddress}</td>
                   <td>{p.port}</td>
                   <td>{p.station}</td>

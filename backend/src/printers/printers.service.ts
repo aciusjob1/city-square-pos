@@ -8,6 +8,12 @@ const SETTING_KEY_FOR_STATION: Record<string, string | null> = {
   NONE: 'printer.default.receipt',
 };
 
+export interface ResolvedPrinter {
+  id: string;
+  name: string;
+  type: 'NETWORK' | 'OS';
+}
+
 @Injectable()
 export class PrintersService {
   private readonly logger = new Logger(PrintersService.name);
@@ -20,7 +26,7 @@ export class PrintersService {
   async findPrinterForStation(
     client: PoolClient,
     station: Station,
-  ): Promise<{ id: string; name: string } | null> {
+  ): Promise<ResolvedPrinter | null> {
     const settingKey = SETTING_KEY_FOR_STATION[station];
 
     if (settingKey) {
@@ -30,16 +36,16 @@ export class PrintersService {
       );
       const printerId = setting.rows[0]?.value;
       if (printerId) {
-        const pref = await client.query<{ id: string; name: string }>(
-          `SELECT id, name FROM printers WHERE id = $1 AND is_active = true`,
+        const pref = await client.query<ResolvedPrinter>(
+          `SELECT id, name, type FROM printers WHERE id = $1 AND is_active = true`,
           [printerId],
         );
         if (pref.rows[0]) return pref.rows[0];
       }
     }
 
-    const r = await client.query<{ id: string; name: string }>(
-      `SELECT id, name FROM printers
+    const r = await client.query<ResolvedPrinter>(
+      `SELECT id, name, type FROM printers
         WHERE station = $1 AND is_active = true
         ORDER BY created_at ASC
         LIMIT 1`,

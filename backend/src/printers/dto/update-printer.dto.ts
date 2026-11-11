@@ -3,6 +3,9 @@ import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength
 export const STATION_NAMES = ['KITCHEN', 'BAR', 'NONE'] as const;
 export type StationName = typeof STATION_NAMES[number];
 
+export const PRINTER_TYPE_NAMES = ['NETWORK', 'OS'] as const;
+export type PrinterTypeName = typeof PRINTER_TYPE_NAMES[number];
+
 export class UpdatePrinterDto {
   @IsOptional()
   @IsString()
@@ -28,4 +31,8 @@ export class UpdatePrinterDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsEnum(PRINTER_TYPE_NAMES)
+  type?: PrinterTypeName;
 }

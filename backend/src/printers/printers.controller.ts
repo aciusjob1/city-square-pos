@@ -23,7 +23,7 @@ export class PrintersController {
   @Get()
   async list() {
     const r = await this.db.query(
-      `SELECT id, name, ip_address, port, station, is_active
+      `SELECT id, name, ip_address, port, station, is_active, type
          FROM printers ORDER BY station, created_at`,
     );
     return {
@@ -34,6 +34,7 @@ export class PrintersController {
         port: p.port,
         station: p.station,
         isActive: p.is_active,
+        type: p.type,
       })),
     };
   }
@@ -45,7 +46,7 @@ export class PrintersController {
   ) {
     // Load current printer
     const current = await this.db.query(
-      `SELECT id, station, is_active FROM printers WHERE id = $1`,
+      `SELECT id, station, is_active, type FROM printers WHERE id = $1`,
       [id],
     );
     if (!current.rows[0]) throw new NotFoundException('Printer not found');
@@ -88,6 +89,23 @@ export class PrintersController {
       }
     }
 
+    // If changing type — same protection: a printer that is assigned as a
+    // default for any station cannot be switched between NETWORK and OS,
+    // because the two types have different dispatch semantics. The default
+    // must be cleared first.
+    if (dto.type !== undefined && dto.type !== current.rows[0].type) {
+      const refs = await this.db.query(
+        `SELECT key FROM settings WHERE key = ANY($1::text[]) AND (value)::text = $2`,
+        [SETTING_KEYS, `"${id}"`],
+      );
+      if (refs.rows.length > 0) {
+        throw new ConflictException({
+          code: 'PRINTER_IN_USE',
+          message: `Printer is assigned as default (${refs.rows.map((r: any) => r.key).join(', ')}). Clear the default before changing its type.`,
+        });
+      }
+    }
+
     // Build update
     const sets: string[] = [];
     const params: any[] = [];
@@ -97,18 +115,19 @@ export class PrintersController {
     if (dto.port !== undefined) { sets.push(`port = $${i++}`); params.push(dto.port); }
     if (dto.station !== undefined) { sets.push(`station = $${i++}::"Station"`); params.push(dto.station); }
     if (dto.isActive !== undefined) { sets.push(`is_active = $${i++}`); params.push(dto.isActive); }
+    if (dto.type !== undefined) { sets.push(`type = $${i++}`); params.push(dto.type); }
     if (sets.length === 0) throw new BadRequestException('No fields to update');
     params.push(id);
 
     const r = await this.db.query(
       `UPDATE printers SET ${sets.join(', ')} WHERE id = $${i}
-       RETURNING id, name, ip_address, port, station, is_active`,
+       RETURNING id, name, ip_address, port, station, is_active, type`,
       params,
     );
     const p = r.rows[0];
     return {
       id: p.id, name: p.name, ipAddress: p.ip_address, port: p.port,
-      station: p.station, isActive: p.is_active,
+      station: p.station, isActive: p.is_active, type: p.type,
     };
   }
 
