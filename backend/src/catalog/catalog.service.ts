@@ -202,10 +202,10 @@ export class CatalogService {
       sets.push(`cost_price = $${i++}`); params.push(input.costPrice);
     }
     if (input.preparationStation !== undefined) {
-      sets.push(`preparation_station = ${i++}::"Station"`); params.push(input.preparationStation);
+      sets.push(`preparation_station = $${i++}::"Station"`); params.push(input.preparationStation);
     }
     if (input.reorderLevel !== undefined) {
-      sets.push(`reorder_level = ${i++}`); params.push(input.reorderLevel);
+      sets.push(`reorder_level = $${i++}`); params.push(input.reorderLevel);
     }
 
     if (sets.length === 0) throw new BadRequestException('No fields to update');

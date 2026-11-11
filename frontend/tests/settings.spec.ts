@@ -16,6 +16,13 @@ test.describe('Settings + Printers (manager + admin)', () => {
 
   test.beforeAll(() => {
     try {
+      // Clear any leftover printer defaults from prior runs
+      execSync(
+        `psql -h 127.0.0.1 -U citysquare -d citysquare -c "UPDATE settings SET value = 'null'::jsonb WHERE key IN ('printer.default.kitchen', 'printer.default.bar', 'printer.default.receipt');"`,
+        { stdio: 'ignore' },
+      );
+    } catch {}
+    try {
       const r = execSync(
         `psql -h 127.0.0.1 -U citysquare -d citysquare -t -A -c "SELECT value FROM settings WHERE key = 'restaurant_name'"`,
         { encoding: 'utf8' },
