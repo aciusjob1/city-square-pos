@@ -45,9 +45,10 @@ export class PrintersService {
     }
 
     const r = await client.query<ResolvedPrinter>(
-      `SELECT id, name, type FROM printers
-        WHERE station = $1 AND is_active = true
-        ORDER BY created_at ASC
+      `SELECT p.id, p.name, p.type FROM printers p
+         JOIN printer_stations ps ON ps.printer_id = p.id
+        WHERE ps.station = $1 AND p.is_active = true
+        ORDER BY p.created_at ASC
         LIMIT 1`,
       [station],
     );

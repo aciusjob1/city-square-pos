@@ -1,4 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import knexFactory from 'knex';
 import { Pool, QueryResult, QueryResultRow, PoolClient } from 'pg';
 
 @Injectable()
@@ -6,7 +9,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
 
-  onModuleInit() {
+  async onModuleInit() {
+    await this.runMigrations();
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 10,
@@ -17,6 +21,33 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('PG pool error: ' + err.message);
     });
     this.logger.log('Database pool initialised');
+  }
+
+  /**
+   * Upgrades install the new backend over the old data directory, so schema
+   * changes must be applied at start-up — the installer only migrates fresh
+   * clusters. Knex tracks applied migrations in knex_migrations, so this is a
+   * no-op on an up-to-date database.
+   */
+  private async runMigrations() {
+    const directory = join(process.cwd(), 'db', 'migrations');
+    if (!existsSync(directory)) {
+      this.logger.warn('No db/migrations directory found; skipping migrations');
+      return;
+    }
+    const knex = knexFactory({
+      client: 'pg',
+      connection: process.env.DATABASE_URL,
+      migrations: { directory, tableName: 'knex_migrations' },
+    });
+    try {
+      const [, applied] = await knex.migrate.latest();
+      if (applied.length > 0) {
+        this.logger.log('Applied database migrations: ' + applied.join(', '));
+      }
+    } finally {
+      await knex.destroy();
+    }
   }
 
   async onModuleDestroy() {

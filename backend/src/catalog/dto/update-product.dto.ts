@@ -42,4 +42,8 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   stockManaged?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAvailable?: boolean;
 }

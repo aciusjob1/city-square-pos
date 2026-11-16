@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards,
+  Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards,
 } from '@nestjs/common';
 import { CatalogService } from './catalog.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -9,6 +9,7 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -21,8 +22,8 @@ export class CatalogController {
   }
 
   @Get('products')
-  products() {
-    return this.catalog.products();
+  products(@Req() req: { user: { role: string } }) {
+    return this.catalog.products(req.user);
   }
 
   @Post('categories')
@@ -50,6 +51,16 @@ export class CatalogController {
   @Roles('MANAGER', 'ADMIN')
   createProduct(@Body() dto: CreateProductDto) {
     return this.catalog.createProduct(dto);
+  }
+
+  // Front-of-house can only flip availability; price/category edits stay manager-only.
+  @Patch('products/:id/availability')
+  @Roles('CASHIER', 'MANAGER', 'ADMIN')
+  updateAvailability(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateAvailabilityDto,
+  ) {
+    return this.catalog.updateProduct(id, { isAvailable: dto.isAvailable });
   }
 
   @Patch('products/:id')

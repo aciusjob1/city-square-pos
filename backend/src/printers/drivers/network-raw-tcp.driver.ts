@@ -1,24 +1,53 @@
+import { connect } from 'node:net';
 import { PrinterDriver, PrintPayload } from './printer-driver.interface';
 
+const DEFAULT_PORT = 9100;
+const CONNECT_TIMEOUT_MS = 5000;
+
 /**
- * Prints to network-attached thermal printers via raw ESC/POS over TCP
- * (typically port 9100 for Epson, Star, Bixolon, etc.).
- *
- * NOT IMPLEMENTED in slice 8.7f. Slice 8.8 will add:
- *   - net.Socket connection to ipAddress:port
- *   - payload write with proper flush + close
- *   - timeout handling (5s default)
- *   - reconnect-retry-once on transient failures
- *
- * The current stub throws so no caller can accidentally believe a print
- * succeeded.
+ * Sends raw ESC/POS bytes to a network-attached thermal printer over TCP
+ * (port 9100 on Epson, Star, Bixolon, Xprinter, etc.).
  */
 export class NetworkRawTcpDriver implements PrinterDriver {
   readonly name = 'network-raw-tcp';
 
-  async print(_job: PrintPayload): Promise<void> {
-    throw new Error(
-      'NetworkRawTcpDriver: physical printing not yet implemented. Deferred to slice 8.8.',
-    );
+  async print(job: PrintPayload): Promise<void> {
+    const host = (job.ipAddress ?? '').trim();
+    if (!host) throw new Error('Network printer has no IP address configured');
+    const port = job.port ?? DEFAULT_PORT;
+
+    try {
+      await this.send(host, port, job.data);
+    } catch (first: any) {
+      // One retry for transient drops (printer waking up, ARP, brief Wi-Fi loss).
+      await this.send(host, port, job.data).catch(() => {
+        throw new Error(`${host}:${port} unreachable (${first?.message ?? first})`);
+      });
+    }
+  }
+
+  private send(host: string, port: number, data: Buffer): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const socket = connect({ host, port });
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        error ? reject(error) : resolve();
+      };
+
+      socket.setTimeout(CONNECT_TIMEOUT_MS, () => {
+        finish(new Error(`Timed out connecting to ${host}:${port}`));
+      });
+      socket.once('error', (error) => finish(error));
+      socket.once('connect', () => {
+        socket.write(data, (error) => {
+          if (error) return finish(error);
+          socket.end();
+        });
+      });
+      socket.once('close', () => finish());
+    });
   }
 }

@@ -29,6 +29,7 @@ export interface TicketContext {
 // ---------------------------------------------------------------------------
 
 export interface BuildKitchenBarInput extends TicketContext {
+  restaurantName: string;
   station: Station;
   lines: TicketLine[]; // deliberately has no price fields
 }
@@ -39,7 +40,7 @@ export function buildKitchenBarTicket(input: BuildKitchenBarInput): string {
     kind: 'PREPARATION',
     station: input.station,
     header: {
-      restaurantName: 'City Square Restaurant',
+      restaurantName: input.restaurantName,
       station: input.station,
       orderNumber: input.orderNumber,
       createdAt: input.createdAt,
@@ -67,6 +68,7 @@ export function buildKitchenBarTicket(input: BuildKitchenBarInput): string {
 // ---------------------------------------------------------------------------
 
 export interface BuildReceiptInput extends TicketContext {
+  restaurantName: string;
   currency: string;
   subtotal: number;
   discountAmount: number;
@@ -79,7 +81,7 @@ export function buildReceiptTicket(input: BuildReceiptInput): string {
     format: 'CITY_SQUARE_RECEIPT_V1',
     kind: 'RECEIPT',
     header: {
-      restaurantName: 'City Square Restaurant',
+      restaurantName: input.restaurantName,
       orderNumber: input.orderNumber,
       createdAt: input.createdAt,
     },
@@ -125,6 +127,7 @@ export interface ConsolidatedOrderSection {
 }
 
 export interface BuildConsolidatedReceiptInput {
+  restaurantName: string;
   orders: ConsolidatedOrderSection[];
   tableName: string | null;
   orderType: string;
@@ -139,7 +142,7 @@ export function buildConsolidatedReceiptTicket(input: BuildConsolidatedReceiptIn
     kind: 'RECEIPT',
     consolidated: true,
     header: {
-      restaurantName: 'City Square Restaurant',
+      restaurantName: input.restaurantName,
       table: input.tableName,
       orderType: input.orderType,
       orderCount: input.orders.length,

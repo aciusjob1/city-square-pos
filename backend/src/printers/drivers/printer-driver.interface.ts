@@ -1,33 +1,28 @@
 /**
  * Driver contract for physically dispatching print jobs.
  *
- * Not wired up in 8.7f. Slice 8.8 will:
- *   - Implement print() in NetworkRawTcpDriver (raw ESC/POS over TCP)
- *   - Implement print() in OsSpoolerDriver (CUPS / Windows spooler)
- *   - Add a job processor that claims PENDING jobs and dispatches via the
- *     correct driver based on printer.type
- *
- * Today: no consumer. Both driver classes throw.
+ * The caller (PrinterDispatchService) renders the stored JSON ticket into
+ * ESC/POS bytes and owns all print_jobs status updates. A driver must only
+ * move bytes to the device and throw on any failure.
  */
 
 export interface PrintPayload {
   printerId: string;
   printerType: 'NETWORK' | 'OS';
-  ticketType: 'KITCHEN' | 'BAR' | 'RECEIPT';
-  payload: string;
-  ipAddress?: string;
-  port?: number;
-  osPrinterName?: string;
+  ticketType: 'KITCHEN' | 'BAR' | 'RECEIPT' | 'TEST';
+  /** Rendered ESC/POS bytes. */
+  data: Buffer;
+  ipAddress?: string | null;
+  port?: number | null;
+  osPrinterName?: string | null;
 }
 
 export interface PrinterDriver {
   readonly name: string;
 
   /**
-   * Send the payload to the printer.
-   * Must throw on any failure — never swallow errors.
-   * Must never mark a print job as successful on its own;
-   * the caller (job processor, in 8.8) is responsible for status updates.
+   * Send the payload to the printer. Must throw on any failure — never swallow
+   * errors, because the caller marks the job FAILED from the thrown message.
    */
   print(job: PrintPayload): Promise<void>;
 }

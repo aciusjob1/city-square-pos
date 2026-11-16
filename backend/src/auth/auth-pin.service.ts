@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../database/database.service';
+import { getPinPepper } from '../common/config';
 
 const RATE_LIMIT_WINDOW_SEC = 60;
 const RATE_LIMIT_MAX = parseInt(process.env.PIN_RATE_LIMIT_MAX || '20', 10);
@@ -46,14 +47,22 @@ export class AuthPinService {
       );
     }
 
-    // 2) Log this attempt (before validation — failed attempts count too)
+    // 2) Opportunistic cleanup runs on every attempt — including failures,
+    //    which are the ones that grow the table.
+    await this.db.query(
+      `DELETE FROM pin_attempts_log
+        WHERE attempted_at < now() - ($1 || ' minutes')::interval`,
+      [String(CLEANUP_WINDOW_MIN)],
+    );
+
+    // 3) Log this attempt (before validation — failed attempts count too)
     await this.db.query(
       `INSERT INTO pin_attempts_log (ip_address) VALUES ($1)`,
       [ipAddress],
     );
 
-    // 3) Deterministic lookup
-    const secret = process.env.JWT_SECRET || 'dev-only-change-me';
+    // 4) Deterministic lookup
+    const secret = getPinPepper();
     const lookup = crypto.createHash('sha256').update(pin + ':' + secret).digest('hex');
 
     const found = await this.db.query<PinUserRow>(
@@ -72,13 +81,13 @@ export class AuthPinService {
     }
     const user = found.rows[0];
 
-    // 4) bcrypt verification (defense in depth)
+    // 5) bcrypt verification (defense in depth)
     const ok = await bcrypt.compare(pin, user.pin_hash);
     if (!ok) {
       throw new UnauthorizedException('Incorrect PIN');
     }
 
-    // 5) Issue JWT — same shape as password login
+    // 6) Issue JWT — same shape as password login
     await this.db.query(
       `UPDATE users SET last_login_at = now() WHERE id = $1`,
       [user.id],
@@ -88,13 +97,6 @@ export class AuthPinService {
     const token = await this.jwt.signAsync(payload);
 
     this.logger.log(`PIN login OK: ${user.username} from ${ipAddress}`);
-
-    // Opportunistic cleanup of old attempts
-    await this.db.query(
-      `DELETE FROM pin_attempts_log
-        WHERE attempted_at < now() - ($1 || ' minutes')::interval`,
-      [String(CLEANUP_WINDOW_MIN)],
-    );
 
     return {
       accessToken: token,

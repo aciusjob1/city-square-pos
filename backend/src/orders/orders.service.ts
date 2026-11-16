@@ -6,8 +6,10 @@ import { DatabaseService } from '../database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AppendItemsDto } from './dto/append-items.dto';
 import { allocateOrderNumber } from '../common/utils/order-number';
+import { loadRestaurantName } from '../common/branding';
 import { buildKitchenBarTicket } from '../printers/ticket.builders';
 import { PrintersService } from '../printers/printers.service';
+import { PrinterDispatchService } from '../printers/printer-dispatch.service';
 import { PrintTicketType, Station } from '../printers/station.enum';
 import { StockService } from '../stock/stock.service';
 
@@ -23,6 +25,7 @@ interface ProductRow {
   selling_price: string;
   preparation_station: string;
   is_active: boolean;
+  is_available: boolean;
 }
 
 @Injectable()
@@ -33,23 +36,44 @@ export class OrdersService {
     private readonly db: DatabaseService,
     private readonly printers: PrintersService,
     private readonly stock: StockService,
+    private readonly dispatch: PrinterDispatchService,
   ) {}
 
   async create(dto: CreateOrderDto, authUser: AuthUser) {
     // -------- Idempotency fast path (sequential retries) --------
+    // Scoped to the caller: every order is created with waiter_id = caller,
+    // so another user's client_uuid must never resolve to an order here.
     const existing = await this.db.query<{ id: string }>(
-      `SELECT id FROM orders WHERE client_uuid = $1 LIMIT 1`,
-      [dto.clientUuid],
+      `SELECT id FROM orders WHERE client_uuid = $1 AND waiter_id = $2 LIMIT 1`,
+      [dto.clientUuid, authUser.userId],
     );
     if (existing.rows[0]) {
       return this.fetchFullOrder(existing.rows[0].id);
     }
 
+    // -------- Validate the table up front (400 instead of FK 500) --------
+    if (dto.tableId) {
+      const table = await this.db.query(
+        `SELECT id FROM tables WHERE id = $1 AND is_active = true`,
+        [dto.tableId],
+      );
+      if (!table.rows[0]) {
+        throw new BadRequestException({
+          code: 'TABLE_NOT_FOUND',
+          message: 'Table not found or inactive.',
+        });
+      }
+    }
+
     // -------- Validate all products before opening a tx --------
     const productIds = Array.from(new Set(dto.items.map((i) => i.productId)));
     const productRes = await this.db.query<ProductRow>(
-      `SELECT id, name, selling_price, preparation_station, is_active, stock_managed
-         FROM products WHERE id = ANY($1::uuid[])`,
+      `SELECT p.id, p.name, p.selling_price,
+              COALESCE(c.printer_station, p.preparation_station) AS preparation_station,
+              p.is_active, p.is_available, p.stock_managed
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.id = ANY($1::uuid[])`,
       [productIds],
     );
     const productRows = productRes.rows as ProductRow[];
@@ -62,6 +86,7 @@ export class OrdersService {
       const p = productMap.get(item.productId);
       if (!p) invalidItems.push({ productId: item.productId, reason: 'NOT_FOUND' });
       else if (!p.is_active) invalidItems.push({ productId: item.productId, reason: 'INACTIVE' });
+      else if (!p.is_available) invalidItems.push({ productId: item.productId, reason: 'UNAVAILABLE' });
     }
     if (invalidItems.length > 0) {
       throw new BadRequestException({
@@ -151,14 +176,12 @@ export class OrdersService {
         const waiterFullName = ctx.rows[0]?.waiter_name ?? authUser.username;
         const tableName = ctx.rows[0]?.table_name ?? null;
 
+        const restaurantName = await loadRestaurantName(this.db);
         for (const [station, stationLines] of byStation.entries()) {
           if (station === Station.NONE) continue;
           const printer = await this.printers.findPrinterForStation(client, station);
-          if (!printer) {
-            this.logger.warn(`No active printer for station ${station}; skipping print job`);
-            continue;
-          }
           const payload = buildKitchenBarTicket({
+            restaurantName,
             orderNumber,
             station,
             waiterFullName,
@@ -174,16 +197,13 @@ export class OrdersService {
           });
           const ticketType =
             station === Station.KITCHEN ? PrintTicketType.KITCHEN : PrintTicketType.BAR;
-          await client.query(
-            `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status)
-             VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING')`,
-            [newOrderId, printer.id, ticketType, payload],
-          );
+          await this.insertStationJob(client, newOrderId, ticketType, payload, printer, station);
         }
 
         return newOrderId;
       });
 
+      this.dispatch.kick();
       return this.fetchFullOrder(orderId);
     } catch (err: any) {
       // 23505 = unique_violation — happens when two concurrent requests
@@ -191,14 +211,20 @@ export class OrdersService {
       // (a) Concurrent retry with the same clientUuid — return the winner.
       if (err?.code === '23505' && String(err.detail || '').includes('client_uuid')) {
         const dup = await this.db.query<{ id: string }>(
-          `SELECT id FROM orders WHERE client_uuid = $1 LIMIT 1`,
-          [dto.clientUuid],
+          `SELECT id FROM orders WHERE client_uuid = $1 AND waiter_id = $2 LIMIT 1`,
+          [dto.clientUuid, authUser.userId],
         );
         if (dup.rows[0]) return this.fetchFullOrder(dup.rows[0].id);
+        throw new ConflictException({
+          code: 'CLIENT_UUID_CONFLICT',
+          message: 'That request id is already in use.',
+        });
       }
       // (b) Concurrent creation for a table that already has an active order —
       //     the DB partial unique index refused a second active row. Return
-      //     the existing active order so the client behaves as if it "resumed".
+      //     the caller's existing active order so the client behaves as if
+      //     it "resumed". Scoped to the caller because the index is keyed on
+      //     (table_id, waiter_id) — another waiter may have their own order.
       if (
         err?.code === '23505' &&
         String(err.constraint || '').includes('orders_one_active_per_table') &&
@@ -207,15 +233,36 @@ export class OrdersService {
         const existing = await this.db.query<{ id: string }>(
           `SELECT id FROM orders
             WHERE table_id = $1
+              AND waiter_id = $2
               AND cancelled_at IS NULL
               AND closed_at IS NULL
             LIMIT 1`,
-          [dto.tableId],
+          [dto.tableId, authUser.userId],
         );
         if (existing.rows[0]) return this.fetchFullOrder(existing.rows[0].id);
       }
+      // Foreign key to a table/product that vanished between validation and
+      // insert — surface as a client error, not a 500.
+      if (err?.code === '23503') {
+        throw new BadRequestException({
+          code: 'INVALID_REFERENCE',
+          message: 'Order references a table or product that no longer exists.',
+        });
+      }
       throw err;
     }
+  }
+
+  /**
+   * Full order read, scoped by role. Waiters may only read their own orders;
+   * cashiers/managers/admins need cross-waiter visibility for billing.
+   */
+  async fetchFullOrderForUser(orderId: string, authUser: AuthUser) {
+    const order = await this.fetchFullOrder(orderId);
+    if (authUser.role === 'WAITER' && order.waiter.id !== authUser.userId) {
+      throw new ForbiddenException('This order belongs to another waiter.');
+    }
+    return order;
   }
 
   async fetchFullOrder(orderId: string) {
@@ -247,9 +294,14 @@ export class OrdersService {
 
     const jobs = await this.db.query(
       `SELECT pj.id, pj.ticket_type, pj.status, pj.attempts,
-              pr.id AS printer_id, pr.name AS printer_name, pr.station AS printer_station
+              pr.id AS printer_id, pr.name AS printer_name,
+              COALESCE((
+                SELECT array_agg(ps.station::text ORDER BY ps.station)
+                  FROM printer_stations ps
+                 WHERE ps.printer_id = pr.id
+              ), '{}') AS printer_stations
          FROM print_jobs pj
-         JOIN printers pr ON pr.id = pj.printer_id
+         LEFT JOIN printers pr ON pr.id = pj.printer_id
         WHERE pj.order_id = $1
         ORDER BY pj.created_at ASC`,
       [orderId],
@@ -292,7 +344,9 @@ export class OrdersService {
         ticketType: r.ticket_type,
         status: r.status,
         attempts: r.attempts,
-        printer: { id: r.printer_id, name: r.printer_name, station: r.printer_station },
+        printer: r.printer_id
+          ? { id: r.printer_id, name: r.printer_name, stations: r.printer_stations }
+          : null,
       })),
     };
   }
@@ -331,19 +385,29 @@ export class OrdersService {
 
   async appendItems(orderId: string, dto: AppendItemsDto, authUser: AuthUser) {
     // -------- Idempotency fast path (sequential retries) --------
-    const already = await this.db.query<{ order_id: string }>(
-      `SELECT order_id FROM order_append_batches WHERE client_uuid = $1`,
+    const already = await this.db.query<{ order_id: string; waiter_id: string }>(
+      `SELECT b.order_id, o.waiter_id
+         FROM order_append_batches b
+         JOIN orders o ON o.id = b.order_id
+        WHERE b.client_uuid = $1`,
       [dto.clientUuid],
     );
     if (already.rows[0]) {
+      if (authUser.role === 'WAITER' && already.rows[0].waiter_id !== authUser.userId) {
+        throw new ForbiddenException('This order belongs to another waiter.');
+      }
       return this.fetchFullOrder(already.rows[0].order_id);
     }
 
     // -------- Validate all products before opening a tx --------
     const productIds = Array.from(new Set(dto.items.map((i) => i.productId)));
     const productRes = await this.db.query<ProductRow>(
-      `SELECT id, name, selling_price, preparation_station, is_active, stock_managed
-         FROM products WHERE id = ANY($1::uuid[])`,
+      `SELECT p.id, p.name, p.selling_price,
+              COALESCE(c.printer_station, p.preparation_station) AS preparation_station,
+              p.is_active, p.is_available, p.stock_managed
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.id = ANY($1::uuid[])`,
       [productIds],
     );
     const productRows = productRes.rows as ProductRow[];
@@ -356,6 +420,7 @@ export class OrdersService {
       const p = productMap.get(item.productId);
       if (!p) invalidItems.push({ productId: item.productId, reason: 'NOT_FOUND' });
       else if (!p.is_active) invalidItems.push({ productId: item.productId, reason: 'INACTIVE' });
+      else if (!p.is_available) invalidItems.push({ productId: item.productId, reason: 'UNAVAILABLE' });
     }
     if (invalidItems.length > 0) {
       throw new BadRequestException({
@@ -479,11 +544,12 @@ export class OrdersService {
           byStation.get(l.station)!.push(l);
         }
 
+        const restaurantName = await loadRestaurantName(this.db);
         for (const [station, stationLines] of byStation.entries()) {
           if (station === Station.NONE) continue;
           const printer = await this.printers.findPrinterForStation(client, station);
-          if (!printer) continue;
           const payload = buildKitchenBarTicket({
+            restaurantName,
             orderNumber: order.order_number,
             station,
             waiterFullName,
@@ -499,42 +565,90 @@ export class OrdersService {
           });
           const ticketType =
             station === Station.KITCHEN ? PrintTicketType.KITCHEN : PrintTicketType.BAR;
-          await client.query(
-            `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status)
-             VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING')`,
-            [orderId, printer.id, ticketType, payload],
-          );
+          await this.insertStationJob(client, orderId, ticketType, payload, printer, station);
         }
       });
 
+      this.dispatch.kick();
       return this.fetchFullOrder(orderId);
     } catch (err: any) {
       // Concurrent retry with the same clientUuid — the batch marker
       // insert collided. The other caller won; return its order.
       if (err?.code === '23505' && String(err.constraint || '').includes('order_append_batches')) {
-        const dup = await this.db.query<{ order_id: string }>(
-          `SELECT order_id FROM order_append_batches WHERE client_uuid = $1`,
+        const dup = await this.db.query<{ order_id: string; waiter_id: string }>(
+          `SELECT b.order_id, o.waiter_id
+             FROM order_append_batches b
+             JOIN orders o ON o.id = b.order_id
+            WHERE b.client_uuid = $1`,
           [dto.clientUuid],
         );
-        if (dup.rows[0]) return this.fetchFullOrder(dup.rows[0].order_id);
+        if (dup.rows[0]) {
+          if (authUser.role === 'WAITER' && dup.rows[0].waiter_id !== authUser.userId) {
+            throw new ForbiddenException('This order belongs to another waiter.');
+          }
+          return this.fetchFullOrder(dup.rows[0].order_id);
+        }
       }
       throw err;
     }
   }
 
-  async listForUser(authUser: AuthUser, limit = 50) {
+  /**
+   * Creates exactly one print job per station. When a station has no active
+   * printer the ticket is stored as FAILED (with the payload) instead of being
+   * dropped, so a mixed kitchen/bar order never loses half its items silently
+   * and Print Jobs shows precisely what could not be printed.
+   */
+  private async insertStationJob(
+    client: PoolClient,
+    orderId: string,
+    ticketType: PrintTicketType,
+    payload: string,
+    printer: { id: string } | null,
+    station: Station,
+  ) {
+    if (printer) {
+      await client.query(
+        `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status)
+         VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING')`,
+        [orderId, printer.id, ticketType, payload],
+      );
+      return;
+    }
+
+    this.logger.warn(
+      `No active printer for station ${station} on order ${orderId}; ticket stored as FAILED`,
+    );
+    await client.query(
+      `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status, last_error)
+       VALUES ($1, NULL, $2::"PrintTicketType", $3, 'FAILED', $4)`,
+      [orderId, ticketType, payload, `No active printer is assigned to the ${station} station`],
+    );
+  }
+
+  async listForUser(
+    authUser: AuthUser,
+    limit = 50,
+    from: string | null = null,
+    to: string | null = null,
+  ) {
     const isPrivileged = ['MANAGER', 'ADMIN', 'CASHIER'].includes(authUser.role);
     const sql = `
       SELECT o.id, o.order_number, o.status, o.order_type, o.total_amount, o.currency,
-             o.client_created_at, o.server_created_at, o.closed_at, o.bill_group_id,
+             o.client_created_at, o.server_created_at, o.closed_at,
+             o.cancelled_at, o.cancellation_reason, o.bill_group_id,
              u.username AS waiter_username, u.full_name AS waiter_full_name
         FROM orders o
         JOIN users u ON u.id = o.waiter_id
        WHERE ($1::uuid IS NULL OR o.waiter_id = $1)
+         AND ($3::date IS NULL
+              OR (o.server_created_at AT TIME ZONE 'Africa/Dar_es_Salaam')::date >= $3::date)
+         AND ($4::date IS NULL
+              OR (o.server_created_at AT TIME ZONE 'Africa/Dar_es_Salaam')::date <= $4::date)
        ORDER BY o.server_created_at DESC
        LIMIT $2`;
     const waiterFilter = isPrivileged ? null : authUser.userId;
-    const r = await this.db.query(sql, [waiterFilter, limit]);
+    const r = await this.db.query(sql, [waiterFilter, limit, from, to]);
     return {
       count: r.rows.length,
       orders: r.rows.map((o: any) => ({
@@ -547,6 +661,8 @@ export class OrdersService {
         clientCreatedAt: o.client_created_at,
         serverCreatedAt: o.server_created_at,
         closedAt: o.closed_at,
+        cancelledAt: o.cancelled_at,
+        cancellationReason: o.cancellation_reason,
         billGroupId: o.bill_group_id,
         waiter: { username: o.waiter_username, fullName: o.waiter_full_name },
       })),

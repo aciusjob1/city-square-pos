@@ -6,13 +6,14 @@ import { AuthService } from './auth.service';
 import { AuthPinService } from './auth-pin.service';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { getJwtSecret } from '../common/config';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'dev-only-change-me',
+      secret: getJwtSecret(),
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '12h' },
     }),
   ],

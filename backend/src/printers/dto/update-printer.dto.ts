@@ -1,4 +1,7 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsEnum, IsInt, IsOptional,
+  IsString, Matches, Max, MaxLength, Min, MinLength,
+} from 'class-validator';
 
 export const STATION_NAMES = ['KITCHEN', 'BAR', 'NONE'] as const;
 export type StationName = typeof STATION_NAMES[number];
@@ -25,8 +28,11 @@ export class UpdatePrinterDto {
   port?: number;
 
   @IsOptional()
-  @IsEnum(STATION_NAMES)
-  station?: StationName;
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsEnum(STATION_NAMES, { each: true })
+  stations?: StationName[];
 
   @IsOptional()
   @IsBoolean()

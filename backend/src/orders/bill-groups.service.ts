@@ -5,14 +5,21 @@ import {
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { buildConsolidatedReceiptTicket, ConsolidatedOrderSection } from '../printers/ticket.builders';
+import { loadRestaurantName } from '../common/branding';
 import { PrintTicketType } from '../printers/station.enum';
+import { PrinterDispatchService } from '../printers/printer-dispatch.service';
+import { StockService } from '../stock/stock.service';
 import { AuthUser } from './orders.service';
 
 @Injectable()
 export class BillGroupsService {
   private readonly logger = new Logger(BillGroupsService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly dispatch: PrinterDispatchService,
+    private readonly stock: StockService,
+  ) {}
 
   // ---------- MERGE ----------
   async merge(orderIds: string[], authUser: AuthUser) {
@@ -23,77 +30,83 @@ export class BillGroupsService {
       });
     }
 
-    const orders = await this.db.query<{
-      id: string;
-      order_number: string;
-      table_id: string | null;
-      cancelled_at: string | null;
-      closed_at: string | null;
-      bill_group_id: string | null;
-      waiter_id: string;
-    }>(
-      `SELECT id, order_number, table_id, cancelled_at, closed_at, bill_group_id, waiter_id
-         FROM orders WHERE id = ANY($1::uuid[])`,
-      [orderIds],
-    );
+    const billGroupId = await this.db.transaction(async (client: PoolClient) => {
+      // Lock every order so two concurrent merges cannot both validate the
+      // same "unmerged" rows and then overwrite each other's group id.
+      // ORDER BY id keeps the lock order deterministic (deadlock avoidance).
+      const orders = await client.query<{
+        id: string;
+        order_number: string;
+        table_id: string | null;
+        cancelled_at: string | null;
+        closed_at: string | null;
+        bill_group_id: string | null;
+        waiter_id: string;
+      }>(
+        `SELECT id, order_number, table_id, cancelled_at, closed_at, bill_group_id, waiter_id
+           FROM orders WHERE id = ANY($1::uuid[])
+          ORDER BY id
+          FOR UPDATE`,
+        [orderIds],
+      );
 
-    if (orders.rows.length !== orderIds.length) {
-      throw new NotFoundException('One or more orders not found.');
-    }
+      if (orders.rows.length !== orderIds.length) {
+        throw new NotFoundException('One or more orders not found.');
+      }
 
-    for (const o of orders.rows) {
-      if (o.cancelled_at) {
-        throw new BadRequestException({
-          code: 'CANNOT_MERGE_CANCELLED',
-          message: `Order ${o.order_number} is cancelled.`,
-        });
-      }
-      if (o.closed_at) {
-        throw new BadRequestException({
-          code: 'CANNOT_MERGE_CLOSED',
-          message: `Order ${o.order_number} is already closed (bill printed).`,
-        });
-      }
-      if (o.bill_group_id) {
-        throw new BadRequestException({
-          code: 'ALREADY_IN_BILL_GROUP',
-          message: `Order ${o.order_number} is already part of a bill group.`,
-        });
-      }
-    }
-
-    // Waiters may only merge their own orders. Merging another waiter's
-    // orders affects two people's sales, so that's a cashier/manager action.
-    // This check is what lets us safely allow @Roles('WAITER', ...) on the
-    // merge endpoint — the ownership boundary is enforced here, not at the
-    // controller.
-    if (authUser.role === 'WAITER') {
       for (const o of orders.rows) {
-        if (o.waiter_id !== authUser.userId) {
-          throw new ForbiddenException(
-            'Waiters can only merge their own orders. Ask a cashier to merge across waiters.',
-          );
+        if (o.cancelled_at) {
+          throw new BadRequestException({
+            code: 'CANNOT_MERGE_CANCELLED',
+            message: `Order ${o.order_number} is cancelled.`,
+          });
+        }
+        if (o.closed_at) {
+          throw new BadRequestException({
+            code: 'CANNOT_MERGE_CLOSED',
+            message: `Order ${o.order_number} is already closed (bill printed).`,
+          });
+        }
+        if (o.bill_group_id) {
+          throw new BadRequestException({
+            code: 'ALREADY_IN_BILL_GROUP',
+            message: `Order ${o.order_number} is already part of a bill group.`,
+          });
         }
       }
-    }
 
-    // All orders must share the same table (or all takeaway)
-    const tables = new Set(orders.rows.map((o) => o.table_id));
-    if (tables.size > 1) {
-      throw new BadRequestException({
-        code: 'MERGE_TABLE_MISMATCH',
-        message: 'All orders in a bill group must belong to the same table (or all be takeaway).',
-      });
-    }
+      // Waiters may only merge their own orders. Merging another waiter's
+      // orders affects two people's sales, so that's a cashier/manager action.
+      if (authUser.role === 'WAITER') {
+        for (const o of orders.rows) {
+          if (o.waiter_id !== authUser.userId) {
+            throw new ForbiddenException(
+              'Waiters can only merge their own orders. Ask a cashier to merge across waiters.',
+            );
+          }
+        }
+      }
 
-    const billGroupId = (
-      await this.db.query<{ id: string }>(`SELECT gen_random_uuid() AS id`)
-    ).rows[0].id;
+      // All orders must share the same table (or all takeaway)
+      const tables = new Set(orders.rows.map((o) => o.table_id));
+      if (tables.size > 1) {
+        throw new BadRequestException({
+          code: 'MERGE_TABLE_MISMATCH',
+          message: 'All orders in a bill group must belong to the same table (or all be takeaway).',
+        });
+      }
 
-    await this.db.query(
-      `UPDATE orders SET bill_group_id = $1, updated_at = now() WHERE id = ANY($2::uuid[])`,
-      [billGroupId, orderIds],
-    );
+      const id = (
+        await client.query<{ id: string }>(`SELECT gen_random_uuid() AS id`)
+      ).rows[0].id;
+
+      await client.query(
+        `UPDATE orders SET bill_group_id = $1, updated_at = now() WHERE id = ANY($2::uuid[])`,
+        [id, orderIds],
+      );
+
+      return id;
+    });
 
     this.logger.log(
       `Merged ${orderIds.length} orders into bill group ${billGroupId} by ${authUser.username}`,
@@ -231,8 +244,17 @@ export class BillGroupsService {
 
     // Receipt printer
     const printer = await this.db.query<{ id: string }>(
-      `SELECT id FROM printers WHERE is_active = true AND station = 'NONE'
-        ORDER BY created_at ASC LIMIT 1`,
+      `SELECT p.id FROM printers p
+        WHERE p.is_active = true
+          AND EXISTS (
+            SELECT 1 FROM printer_stations ps
+             WHERE ps.printer_id = p.id AND ps.station = 'NONE')
+        ORDER BY
+          (p.id::text = COALESCE(
+            (SELECT value #>> '{}' FROM settings WHERE key = 'printer.default.receipt'),
+            '')) DESC,
+          p.created_at ASC
+        LIMIT 1`,
     );
     if (!printer.rows[0]) {
       throw new ConflictException({
@@ -242,6 +264,7 @@ export class BillGroupsService {
     }
 
     const payload = buildConsolidatedReceiptTicket({
+      restaurantName: await loadRestaurantName(this.db),
       orders: sections,
       tableName,
       orderType,
@@ -252,29 +275,60 @@ export class BillGroupsService {
 
     // Insert RECEIPT job (linked to the first order for schema compatibility;
     // the payload itself contains all order numbers) + close all orders.
-    const printJobId = await this.db.transaction(async (client: PoolClient) => {
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status, idempotency_key)
-         VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING', $5)
-         RETURNING id`,
-        [
-          ordersRes.rows[0].id,
-          printer.rows[0].id,
-          PrintTicketType.RECEIPT,
-          payload,
-          `billgroup-${billGroupId}`,
-        ],
-      );
+    const idempotencyKey = `billgroup-${billGroupId}`;
+    let printJobId: string;
+    try {
+      printJobId = await this.db.transaction(async (client: PoolClient) => {
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO print_jobs (order_id, printer_id, ticket_type, payload, status, idempotency_key)
+           VALUES ($1, $2, $3::"PrintTicketType", $4, 'PENDING', $5)
+           RETURNING id`,
+          [
+            ordersRes.rows[0].id,
+            printer.rows[0].id,
+            PrintTicketType.RECEIPT,
+            payload,
+            idempotencyKey,
+          ],
+        );
 
-      await client.query(
-        `UPDATE orders SET closed_at = COALESCE(closed_at, now()), updated_at = now()
-          WHERE bill_group_id = $1`,
-        [billGroupId],
-      );
+        await client.query(
+          `UPDATE orders SET closed_at = COALESCE(closed_at, now()), updated_at = now()
+            WHERE bill_group_id = $1`,
+          [billGroupId],
+        );
 
-      return inserted.rows[0].id;
-    });
+        for (const o of ordersRes.rows) {
+          await this.stock.consumePoolsForOrder(client, o.id, authUser.userId);
+        }
 
+        return inserted.rows[0].id;
+      });
+    } catch (err: any) {
+      // Concurrent double-click / retry: the other caller already created
+      // the bill job. Return that job instead of a 500.
+      if (
+        err?.code === '23505' &&
+        String(err.constraint || '').includes('print_jobs_idempotency_key')
+      ) {
+        const dup = await this.db.query<{ id: string }>(
+          `SELECT id FROM print_jobs WHERE idempotency_key = $1 LIMIT 1`,
+          [idempotencyKey],
+        );
+        if (dup.rows[0]) {
+          return {
+            printJobId: dup.rows[0].id,
+            billGroupId,
+            orderCount: sections.length,
+            grandTotal: grandTotal.toFixed(2),
+            currency,
+          };
+        }
+      }
+      throw err;
+    }
+
+    this.dispatch.kick();
     this.logger.log(
       `Consolidated bill ${printJobId} for group ${billGroupId} ` +
       `(${sections.length} orders, TZS ${grandTotal}) by ${authUser.username}`,

@@ -52,6 +52,14 @@ export class UsersController {
     return this.users.setPin(id, body.pin, req.user);
   }
 
+  @Patch(':id/activate')
+  activate(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.users.activate(id, req.user);
+  }
+
   @Delete(':id')
   deactivate(
     @Param('id', new ParseUUIDPipe()) id: string,

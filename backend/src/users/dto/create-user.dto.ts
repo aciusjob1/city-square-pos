@@ -1,5 +1,5 @@
 import {
-  IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength,
+  IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf,
 } from 'class-validator';
 
 export const ROLE_NAMES = ['ADMIN', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'] as const;
@@ -25,12 +25,15 @@ export class CreateUserDto {
   @IsEnum(ROLE_NAMES)
   role: RoleName;
 
+  // Waiters sign in with a PIN, so staff passwords are only required for the
+  // other roles.
+  @ValidateIf((o) => o.role !== 'WAITER')
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  password: string;
+  password?: string;
 
-  @IsOptional()
+  @ValidateIf((o) => o.role === 'WAITER' || o.pin !== undefined)
   @IsString()
   @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin?: string;

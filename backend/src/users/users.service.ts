@@ -3,6 +3,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { validatePasswordStrength } from '../common/utils/password';
 import { DatabaseService } from '../database/database.service';
+import { getPinPepper } from '../common/config';
 
 export interface UserRow {
   id: string;
@@ -110,24 +111,36 @@ export class UsersService {
     fullName: string;
     email?: string;
     role: string;
-    password: string;
+    password?: string;
     pin?: string;
   }, actor: AuthUser) {
     this.assertCanAssignRole(actor, input.role);
 
-    const pw = validatePasswordStrength(input.password);
-    if (!pw.ok) throw new BadRequestException({ code: 'WEAK_PASSWORD', errors: pw.errors });
-
-    if (input.pin !== undefined) {
-      if (input.role !== 'WAITER') throw new BadRequestException('PINs are only available for waiters');
+    const isWaiter = input.role === 'WAITER';
+    if (isWaiter) {
+      if (!input.pin) throw new BadRequestException('PIN is required for waiters');
       if (!/^\d{4}$/.test(input.pin)) throw new BadRequestException('PIN must be exactly 4 digits');
+    } else {
+      if (input.pin !== undefined) throw new BadRequestException('PINs are only available for waiters');
+      const pw = validatePasswordStrength(input.password ?? '');
+      if (!pw.ok) {
+        throw new BadRequestException({
+          code: 'WEAK_PASSWORD',
+          message: `Password too weak: ${pw.errors.join(', ')}`,
+          errors: pw.errors,
+        });
+      }
     }
 
     const roleId = await this.roleIdByName(input.role);
-    const passwordHash = await bcrypt.hash(input.password, 10);
+    // Waiters authenticate with a PIN only, so the password column keeps an
+    // unusable random value instead of a credential they do not need.
+    const passwordHash = isWaiter
+      ? await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10)
+      : await bcrypt.hash(input.password!, 10);
     const pinHash = input.pin ? await bcrypt.hash(input.pin, 10) : null;
     const pinLookup = input.pin
-      ? crypto.createHash('sha256').update(input.pin + ':' + (process.env.JWT_SECRET || 'dev-only-change-me')).digest('hex')
+      ? crypto.createHash('sha256').update(input.pin + ':' + getPinPepper()).digest('hex')
       : null;
 
     try {
@@ -170,6 +183,8 @@ export class UsersService {
     fullName?: string;
     email?: string;
     role?: string;
+    password?: string;
+    pin?: string;
   }, actor: AuthUser) {
     const target = await this.findById(id);
     if (!target) throw new NotFoundException('User not found');
@@ -178,6 +193,9 @@ export class UsersService {
     }
     this.assertCanActOn(actor, target.role_name);
     if (input.role !== undefined) this.assertCanAssignRole(actor, input.role);
+
+    const nextRole = input.role ?? target.role_name;
+    const roleChanged = nextRole !== target.role_name;
 
     const sets: string[] = [];
     const params: any[] = [];
@@ -193,6 +211,39 @@ export class UsersService {
       const roleId = await this.roleIdByName(input.role);
       sets.push(`role_id = $${i++}`); params.push(roleId);
     }
+
+    if (input.pin !== undefined) {
+      if (nextRole !== 'WAITER') throw new BadRequestException('PINs are only available for waiters');
+      const pinHash = await bcrypt.hash(input.pin, 10);
+      const pinLookup = crypto.createHash('sha256').update(input.pin + ':' + getPinPepper()).digest('hex');
+      sets.push(`pin_hash = $${i++}`); params.push(pinHash);
+      sets.push(`pin_lookup = $${i++}`); params.push(pinLookup);
+      sets.push(`pin_set_at = $${i++}`); params.push(new Date());
+    } else if (roleChanged && nextRole === 'WAITER') {
+      const pin = await this.db.query('SELECT pin_lookup FROM users WHERE id = $1', [id]);
+      if (!pin.rows[0]?.pin_lookup) {
+        throw new BadRequestException('Set a 4-digit PIN when switching this user to waiter');
+      }
+    }
+
+    if (input.password !== undefined) {
+      if (nextRole === 'WAITER') {
+        throw new BadRequestException('Waiters sign in with a PIN; a password is not used');
+      }
+      const pw = validatePasswordStrength(input.password);
+      if (!pw.ok) {
+        throw new BadRequestException({
+          code: 'WEAK_PASSWORD',
+          message: `Password too weak: ${pw.errors.join(', ')}`,
+          errors: pw.errors,
+        });
+      }
+      sets.push(`password_hash = $${i++}`);
+      params.push(await bcrypt.hash(input.password, 10));
+    } else if (roleChanged && target.role_name === 'WAITER') {
+      throw new BadRequestException('Set a password when changing a waiter to another role');
+    }
+
     if (sets.length === 0) throw new BadRequestException('No fields to update');
     sets.push(`updated_at = now()`);
     params.push(id);
@@ -209,12 +260,15 @@ export class UsersService {
         username: u.username,
         fullName: u.full_name,
         email: u.email,
-        role: input.role ?? target.role_name,
+        role: nextRole,
         isActive: u.is_active,
       };
     } catch (e: any) {
       if (e.code === '23505' && (e.constraint || '').includes('email')) {
         throw new ConflictException({ code: 'DUPLICATE_EMAIL', message: 'Email already exists' });
+      }
+      if (e.code === '23505' && (e.constraint || '').includes('pin_lookup')) {
+        throw new ConflictException({ code: 'DUPLICATE_PIN', message: 'PIN already in use by another waiter' });
       }
       throw e;
     }
@@ -224,9 +278,18 @@ export class UsersService {
     const target = await this.findById(id);
     if (!target) throw new NotFoundException('User not found');
     this.assertCanActOn(actor, target.role_name);
+    if (target.role_name === 'WAITER') {
+      throw new BadRequestException('Waiters sign in with a PIN. Use the PIN action instead.');
+    }
 
     const pw = validatePasswordStrength(newPassword);
-    if (!pw.ok) throw new BadRequestException({ code: 'WEAK_PASSWORD', errors: pw.errors });
+    if (!pw.ok) {
+      throw new BadRequestException({
+        code: 'WEAK_PASSWORD',
+        message: `Password too weak: ${pw.errors.join(', ')}`,
+        errors: pw.errors,
+      });
+    }
 
     const hash = await bcrypt.hash(newPassword, 10);
     await this.db.query(
@@ -244,7 +307,7 @@ export class UsersService {
     if (!/^\d{4}$/.test(pin)) throw new BadRequestException('PIN must be exactly 4 digits');
 
     const pinHash = await bcrypt.hash(pin, 10);
-    const pinLookup = crypto.createHash('sha256').update(pin + ':' + (process.env.JWT_SECRET || 'dev-only-change-me')).digest('hex');
+    const pinLookup = crypto.createHash('sha256').update(pin + ':' + getPinPepper()).digest('hex');
 
     try {
       await this.db.query(
@@ -260,8 +323,19 @@ export class UsersService {
     }
   }
 
-  async deactivate(id: string, actor: AuthUser) {
+  async activate(id: string, actor: AuthUser) {
     const target = await this.findById(id);
+    if (!target) throw new NotFoundException('User not found');
+    this.assertCanActOn(actor, target.role_name);
+
+    await this.db.query(
+      'UPDATE users SET is_active = true, updated_at = now() WHERE id = $1',
+      [id],
+    );
+    return { id, isActive: true };
+  }
+
+  async deactivate(id: string, actor: AuthUser) {    const target = await this.findById(id);
     if (!target) throw new NotFoundException('User not found');
     if (actor.userId === id) throw new BadRequestException('Cannot deactivate your own account');
     this.assertCanActOn(actor, target.role_name);

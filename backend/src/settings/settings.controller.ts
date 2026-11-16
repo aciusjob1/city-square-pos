@@ -6,6 +6,17 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('settings')
+export class BrandingController {
+  constructor(private readonly settings: SettingsService) {}
+
+  // Public: login screens and the top bar need branding before sign-in.
+  @Get('branding')
+  branding() {
+    return this.settings.branding();
+  }
+}
+
+@Controller('settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('MANAGER', 'ADMIN')
 export class SettingsController {

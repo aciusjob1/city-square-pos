@@ -33,7 +33,7 @@ exports.up = async function (knex) {
   `);
 
   // 4) Backfill: assign PINs to active WAITERs that don't have one yet.
-  const secret = process.env.JWT_SECRET || 'dev-only-change-me';
+  const secret = process.env.PIN_PEPPER || process.env.JWT_SECRET || 'dev-only-change-me';
 
   const waiters = await knex.raw(`
     SELECT u.id, u.username

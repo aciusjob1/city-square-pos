@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class PatchSettingsDto {
   @IsOptional()
@@ -6,6 +6,12 @@ export class PatchSettingsDto {
   @MinLength(1)
   @MaxLength(100)
   restaurant_name?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.restaurant_logo !== null)
+  @IsString()
+  @MaxLength(800_000)
+  restaurant_logo?: string | null;
 
   @IsOptional()
   @IsString()
@@ -27,4 +33,12 @@ export class PatchSettingsDto {
   @ValidateIf((o) => o['printer.default.receipt'] !== null)
   @IsUUID()
   'printer.default.receipt'?: string | null;
+
+  @IsOptional()
+  @IsIn(['AUTO', 'MANUAL'])
+  'day.rollover_mode'?: 'AUTO' | 'MANUAL';
+
+  @IsOptional()
+  @IsIn(['ALL', 'WIRED'])
+  network_access?: 'ALL' | 'WIRED';
 }

@@ -1,24 +1,31 @@
 import {
-  BadRequestException, ConflictException,
+  BadRequestException, ConflictException, ForbiddenException,
   Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { buildReceiptTicket, PricedTicketLine } from '../printers/ticket.builders';
+import { loadRestaurantName } from '../common/branding';
 import { PrintTicketType } from '../printers/station.enum';
+import { PrinterDispatchService } from '../printers/printer-dispatch.service';
+import { StockService } from '../stock/stock.service';
 import { AuthUser } from '../orders/orders.service';
 
 @Injectable()
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly dispatch: PrinterDispatchService,
+    private readonly stock: StockService,
+  ) {}
 
   async requestBill(orderId: string, authUser: AuthUser) {
     const ordRes = await this.db.query(
       `SELECT o.id, o.order_number, o.status, o.order_type, o.subtotal,
               o.discount_amount, o.total_amount, o.currency, o.notes,
-              o.cancelled_at,
+              o.cancelled_at, o.waiter_id,
               u.full_name AS waiter_full_name,
               t.name AS table_name
          FROM orders o
@@ -29,6 +36,12 @@ export class ReceiptsService {
     );
     if (!ordRes.rows[0]) throw new NotFoundException('Order not found');
     const o = ordRes.rows[0];
+
+    // Requesting a bill closes the order. A waiter must not close someone
+    // else's order; cross-waiter billing is a cashier+ action.
+    if (authUser.role === 'WAITER' && o.waiter_id !== authUser.userId) {
+      throw new ForbiddenException('This order belongs to another waiter.');
+    }
     if (o.cancelled_at) {
       throw new BadRequestException({
         code: 'ORDER_CANCELLED',
@@ -61,7 +74,7 @@ export class ReceiptsService {
       `SELECT COUNT(*)::text AS n FROM print_jobs
         WHERE order_id = $1
           AND ticket_type = 'RECEIPT'
-          AND status IN ('SENT', 'CONFIRMED')`,
+          AND status IN ('SENT', 'CONFIRMED', 'FAILED')`,
       [orderId],
     );
     const priorPrints = parseInt(confirmedCount.rows[0].n, 10);
@@ -70,9 +83,17 @@ export class ReceiptsService {
       : `bill-reprint-${orderId}-${priorPrints + 1}`;
 
     const printer = await this.db.query<{ id: string }>(
-      `SELECT id FROM printers
-        WHERE is_active = true AND station = 'NONE'
-        ORDER BY created_at ASC LIMIT 1`,
+      `SELECT p.id FROM printers p
+        WHERE p.is_active = true
+          AND EXISTS (
+            SELECT 1 FROM printer_stations ps
+             WHERE ps.printer_id = p.id AND ps.station = 'NONE')
+        ORDER BY
+          (p.id::text = COALESCE(
+            (SELECT value #>> '{}' FROM settings WHERE key = 'printer.default.receipt'),
+            '')) DESC,
+          p.created_at ASC
+        LIMIT 1`,
     );
     if (!printer.rows[0]) {
       throw new ConflictException({
@@ -98,6 +119,7 @@ export class ReceiptsService {
     }));
 
     const payload = buildReceiptTicket({
+      restaurantName: await loadRestaurantName(this.db),
       orderNumber: o.order_number,
       waiterFullName: o.waiter_full_name,
       tableName: o.table_name,
@@ -123,12 +145,14 @@ export class ReceiptsService {
           `UPDATE orders SET closed_at = COALESCE(closed_at, now()) WHERE id = $1`,
           [orderId],
         );
+        await this.stock.consumePoolsForOrder(client, orderId, authUser.userId);
         return inserted.rows[0].id;
       });
 
       this.logger.log(
         `Bill job ${printJobId} (${idempotencyKey}) for ${o.order_number} by ${authUser.username}`,
       );
+      this.dispatch.kick();
 
       return {
         printJobId,
