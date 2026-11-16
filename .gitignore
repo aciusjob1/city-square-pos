@@ -4,5 +4,20 @@ dist/
 .env
 *.tsbuildinfo
 playwright-probe.mjs
-playwright-probe.mjs
-playwright-probe.mjs
+installer/build/
+installer/out/
+backups/
+.tmp-backups/
+
+# Local runtime data and bundled database server
+pg17/
+pgdata/
+verify/
+frontend/test-results/
+frontend/playwright-report/
+
+# Never commit TLS key material or issued certificates
+*.pfx
+*.cer
+*.pem
+*.key
