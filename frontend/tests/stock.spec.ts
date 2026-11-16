@@ -55,7 +55,7 @@ test.describe('Stock (manager)', () => {
 
   test('manager can restock a product', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
-    const productId = await findProductId(request, token, 'Samaki');
+    const productId = await findProductId(request, token, 'Fish Masala');
 
     // Enable stock_managed so product appears in /stock/balances
     await request.patch(`${API}/products/${productId}`, {
@@ -90,7 +90,7 @@ test.describe('Stock (manager)', () => {
 
   test('manager can update reorder level', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
-    const productId = await findProductId(request, token, 'Ugali');
+    const productId = await findProductId(request, token, 'Ugali dona');
 
     // Enable stock_managed so product appears in /stock/balances
     await request.patch(`${API}/products/${productId}`, {
@@ -121,7 +121,7 @@ test.describe('Stock (manager)', () => {
 
   test('negative reorder level rejected', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
-    const productId = await findProductId(request, token, 'Chips');
+    const productId = await findProductId(request, token, 'Chipsi kavu');
 
     const patch = await request.patch(`${API}/products/${productId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -132,7 +132,7 @@ test.describe('Stock (manager)', () => {
 
   test('low-stock endpoint filters correctly', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
-    const productId = await findProductId(request, token, 'Kuku');
+    const productId = await findProductId(request, token, 'Fried Chicken');
 
     // Enable stock_managed + set reorder level to 10, restock 5 → LOW
     await request.patch(`${API}/products/${productId}`, {
@@ -162,11 +162,14 @@ test.describe('Stock (manager)', () => {
     const low2Body = await low2.json();
     expect(low2Body.products.some((p: any) => p.productId === productId)).toBe(false);
 
-    // Cleanup: reset stockManaged + reorderLevel
+    // Cleanup: reset stockManaged + reorderLevel and remove test movements
     await request.patch(`${API}/products/${productId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: { stockManaged: false, reorderLevel: 0 },
     });
+    try {
+      execSync(`psql -h 127.0.0.1 -U citysquare -d citysquare -c "DELETE FROM stock_movements WHERE notes LIKE 'Test-lowstock-%';"`, { stdio: 'ignore' });
+    } catch {}
   });
 
   test('waiter cannot access stock endpoints', async ({ request }) => {
@@ -214,28 +217,25 @@ test.describe('Stock (manager)', () => {
 
   test('stock/low-stock filters to stock_managed = true', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
-    const list = await request.get(`${API}/products`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const prod = (await list.json()).products[0];
+    const productId = await findProductId(request, token, 'Mbuzi roast');
 
     try {
-      await request.patch(`${API}/products/${prod.id}`, {
+      await request.patch(`${API}/products/${productId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { stockManaged: true, reorderLevel: 10 },
       });
       await request.post(`${API}/stock/restock`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        data: { productId: prod.id, quantity: 3, notes: 'Test-lowstock-managed' },
+        data: { productId, quantity: 3, notes: 'Test-lowstock-managed' },
       });
 
       const low = await request.get(`${API}/stock/low-stock`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await low.json();
-      expect(body.products.some((p: any) => p.productId === prod.id)).toBe(true);
+      expect(body.products.some((p: any) => p.productId === productId)).toBe(true);
     } finally {
-      await request.patch(`${API}/products/${prod.id}`, {
+      await request.patch(`${API}/products/${productId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { stockManaged: false, reorderLevel: 0 },
       });

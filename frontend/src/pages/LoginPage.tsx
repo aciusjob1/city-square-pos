@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
+import { DEFAULT_LOGO, useBranding } from '../branding/BrandingContext';
 import './LoginPage.css';
 
 export function LoginPage() {
   const { user, login } = useAuth();
+  const { branding } = useBranding();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,8 +34,12 @@ export function LoginPage() {
     <main className="login-page">
       <section className="login-card">
         <header className="login-header">
-          <div className="brand-icon">CS</div>
-          <h1>City Square</h1>
+          <img
+            src={branding.restaurantLogo ?? DEFAULT_LOGO}
+            alt={`${branding.restaurantName} logo`}
+            className="brand-logo"
+          />
+          <h1>{branding.restaurantName}</h1>
           <p>Restaurant Management System</p>
         </header>
 
@@ -90,7 +96,11 @@ export function LoginPage() {
             <span className="status-dot" />
             Online
           </span>
-          <span>Staff Access</span>
+          <span>
+            <Link to="/about" className="login-about-link">About</Link>
+            <span aria-hidden="true"> · </span>
+            Staff Access
+          </span>
         </footer>
       </section>
     </main>

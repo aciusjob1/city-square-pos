@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
 import { listKitchenOrders } from '../../lib/kitchen.api';
 import type { KitchenOrder } from '../../lib/kitchen.api';
 import './KitchenHome.css';
@@ -28,7 +27,6 @@ function formatHHMM(iso: string): string {
 }
 
 export function KitchenHome() {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<KitchenOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -78,9 +76,7 @@ export function KitchenHome() {
       <div className="kitchen-header">
         <div>
           <h1>Kitchen</h1>
-          <p className="kitchen-subtitle">
-            {user?.fullName} · {lastUpdatedLabel}
-          </p>
+          <p className="kitchen-subtitle">{lastUpdatedLabel}</p>
         </div>
         <button className="kitchen-refresh" onClick={fetchOrders}>
           Refresh

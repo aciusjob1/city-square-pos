@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { PageSearch } from '../../components/PageSearch';
 import {
   listProductsFull,
   createProduct,
@@ -32,6 +33,7 @@ export function ManagerProducts() {
   const [costPrice, setCostPrice] = useState('0');
   const [station, setStation] = useState<Station>('KITCHEN');
   const [stockManaged, setStockManaged] = useState(false);
+  const [query, setQuery] = useState('');
 
   async function load() {
     const [prodRes, catRes] = await Promise.all([listProductsFull(), listCategoriesFull()]);
@@ -122,9 +124,21 @@ export function ManagerProducts() {
   const isBelowCost = (sell: string, cost: string) =>
     parseFloat(sell) < parseFloat(cost);
 
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      (p.sku ?? '').toLowerCase().includes(q) ||
+      categoryName(p.categoryId).toLowerCase().includes(q) ||
+      p.preparationStation.toLowerCase().includes(q),
+    );
+  }, [products, query, categories]);
+
   return (
     <div className="page manager-page">
-      <div className="manager-products-header">
+      <div className="manager-page-header">
         <h2>Products</h2>
         {edit.kind === 'none' && (
           <button className="manager-refresh" onClick={beginAdd}>
@@ -132,6 +146,15 @@ export function ManagerProducts() {
           </button>
         )}
       </div>
+
+      {products && products.length > 0 && (
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search products by name, SKU, category or station…"
+          count={`${filteredProducts.length} of ${products.length}`}
+        />
+      )}
 
       {edit.kind !== 'none' && (
         <div className="manager-prod-form">
@@ -196,7 +219,12 @@ export function ManagerProducts() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => {
+              {filteredProducts.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="muted" style={{ textAlign: 'center' }}>No products match your search.</td>
+                </tr>
+              )}
+              {filteredProducts.map((p) => {
                 const warn = isBelowCost(p.sellingPrice, p.costPrice);
                 return (
                   <tr key={p.id} className={warn ? 'manager-prod-warning-row' : ''}>

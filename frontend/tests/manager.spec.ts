@@ -25,7 +25,8 @@ test.describe('Manager dashboard', () => {
 
     // Print Jobs link works
     await page.getByText('Pending Print Jobs').click();
-    await expect(page).toHaveURL(/\/print-jobs/);
+    await expect(page).toHaveURL(/\/manager\/print-jobs$/);
+    await expect(page.getByRole('heading', { name: 'Print Jobs' })).toBeVisible();
   });
 
   test('hourly sales section renders with bars', async ({ page }) => {
@@ -44,6 +45,38 @@ test.describe('Manager dashboard', () => {
   expect(rows + empty).toBeGreaterThan(0);
   });
 
+  test('top bar shows branding, role, and sign out — without Print Jobs', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Username').fill('manager');
+    await page.getByLabel('Password').fill('manager123');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/manager$/, { timeout: 10000 });
+
+    const topbar = page.locator('.topbar');
+    await expect(topbar).toBeVisible();
+    await expect(topbar.locator('.topbar-brand')).toContainText('City Square');
+    await expect(topbar.locator('.topbar-role')).toHaveText('Manager');
+    await expect(topbar.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    // Print Jobs now lives with the manager tabs, not the global top bar.
+    await expect(topbar.getByRole('link', { name: 'Print Jobs' })).toHaveCount(0);
+  });
+
+  test('manager tab opens Print Jobs inside the manager layout', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Username').fill('manager');
+    await page.getByLabel('Password').fill('manager123');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/manager$/, { timeout: 10000 });
+
+    const printJobsTab = page
+      .locator('.manager-tabs')
+      .getByRole('link', { name: 'Print Jobs', exact: true });
+    await printJobsTab.click();
+    await expect(page).toHaveURL(/\/manager\/print-jobs$/);
+    await expect(printJobsTab).toHaveClass(/manager-tab-active/);
+    await expect(page.getByRole('heading', { name: 'Print Jobs' })).toBeVisible();
+  });
+
   test('manager tab navigation is present and works', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Username').fill('manager');
@@ -51,8 +84,8 @@ test.describe('Manager dashboard', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/manager$/, { timeout: 10000 });
 
-    for (const label of ['Dashboard', 'Users', 'Categories', 'Products', 'Settings']) {
-      await expect(page.getByRole('link', { name: label })).toBeVisible();
+    for (const label of ['Dashboard', 'Orders', 'Users', 'Categories', 'Products', 'Print Jobs', 'Settings']) {
+      await expect(page.getByRole('link', { name: label, exact: true })).toBeVisible();
     }
 
     await expect(page.getByRole('link', { name: 'Dashboard' })).toHaveClass(/manager-tab-active/);

@@ -1,0 +1,558 @@
+.cashier-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+@media (min-width: 1024px) {
+  .cashier-page { padding: 28px 28px 80px; }
+}
+
+.cashier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cashier-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+
+.cashier-subtitle {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.cashier-refresh {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.cashier-refresh:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* Search */
+
+.cashier-search {
+  margin-bottom: 16px;
+}
+
+.cashier-search input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 1rem;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cashier-search input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* Tabs */
+
+.cashier-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cashier-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.cashier-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.cashier-tabs button:hover {
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+.cashier-tabs button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+}
+
+.cashier-tabs .count {
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 0.72rem;
+  font-weight: 700;
+  min-width: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-align: center;
+}
+
+.cashier-tabs button.active .count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* List */
+
+.cashier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cashier-row {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.cashier-row:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.cashier-row.expanded {
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+.cashier-row-header {
+  width: 100%;
+  flex: 1;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  gap: 12px;
+}
+
+.order-num {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-total {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #6b7280;
+  flex-wrap: wrap;
+}
+
+.order-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.badge-open {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-closed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.time-ago {
+  margin-left: auto;
+}
+
+/* Expanded details */
+
+.cashier-details {
+  padding: 0 16px 16px;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 4px 0;
+  font-size: 0.92rem;
+  gap: 12px;
+}
+
+.detail-row > span:last-child {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-sep {
+  border-top: 1px dashed #d1d5db;
+  margin: 8px 0;
+}
+
+.detail-total {
+  font-weight: 700;
+  font-size: 1rem;
+  padding-top: 6px;
+}
+
+.cashier-print-btn {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cashier-print-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.cashier-print-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .cashier-page { padding: 16px 12px 80px; }
+  .cashier-header h1 { font-size: 1.25rem; }
+  .row-meta { font-size: 0.8rem; gap: 8px; }
+}
+
+@media (min-width: 1200px) {
+  .cashier-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+}
+
+/* ---------- Row with checkbox ---------- */
+
+.cashier-row-inner {
+  display: flex;
+  align-items: stretch;
+}
+
+.cashier-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.cashier-checkbox input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+/* ---------- Bill group row ---------- */
+
+.cashier-row-group {
+  border-color: #2563eb;
+  border-width: 2px;
+  background: #f0f7ff;
+}
+
+.cashier-group-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #dbeafe;
+}
+
+.badge-group {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.cashier-group-body {
+  padding: 12px 16px 16px;
+}
+
+.cashier-group-order {
+  margin-bottom: 8px;
+}
+
+.group-order-expand {
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.group-order-expand:hover {
+  text-decoration: underline;
+}
+
+.cashier-details-inline {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #dbeafe;
+}
+
+.cashier-group-body .group-order-line {
+  margin-bottom: 6px;
+}
+
+.cashier-group-body .group-grand-total {
+  margin-top: 8px;
+}
+
+.group-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.group-print-btn {
+  flex: 1;
+  background: #2563eb;
+  color: #fff;
+  border: 0;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.group-print-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.group-print-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.group-unmerge-btn {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.group-unmerge-btn:hover:not(:disabled) {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.group-unmerge-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Date range ---------- */
+
+.cashier-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.cashier-date-range label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.cashier-date-range input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fff;
+  color: #111827;
+}
+
+.cashier-date-range input:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.cashier-date-range button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.cashier-date-range button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.cashier-date-range button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.cashier-date-range button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* ---------- Cancellation ---------- */
+
+.badge-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.cashier-row-cancelled {
+  background: #fff7f7;
+}
+
+.cancel-reason {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+
+.cashier-details-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cashier-details-actions .cashier-print-btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+.cashier-cancel-btn {
+  flex: 0 0 auto;
+  padding: 14px 16px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: #fff;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.cashier-cancel-btn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.cashier-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.group-order-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.group-order-cancel {
+  background: transparent;
+  border: 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.group-order-cancel:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.group-order-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

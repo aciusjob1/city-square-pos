@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth, homePathForRole } from './AuthContext';
 import type { Role } from '../lib/types';
+import { loginPathForTerminal } from '../lib/terminal';
 
 interface Props {
   children: ReactNode;
@@ -30,7 +31,7 @@ export function ProtectedRoute({ children, allow }: Props) {
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    return <Navigate to={loginPathForTerminal()} state={{ from: location.pathname }} replace />;
   }
 
   if (allow && !allow.includes(user.role)) {

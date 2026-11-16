@@ -72,7 +72,9 @@ test.describe('Cashier bill groups', () => {
     await page.getByLabel('Username').fill('cashier1');
     await page.getByLabel('Password').fill('waiter123');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/\/cashier/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/cashier$/, { timeout: 10000 });
+    await page.getByRole('link', { name: 'Orders', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Orders & Bills' })).toBeVisible();
 
     // Clear any stray search filter
     const searchInput = page.locator('.cashier-search input');

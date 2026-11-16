@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { PageSearch } from '../../components/PageSearch';
 import {
   listUsersFull,
   listRolesFull,
@@ -8,6 +9,7 @@ import {
   resetUserPassword,
   setUserPin,
   deactivateUser,
+  activateUser,
 } from '../../lib/manager.api';
 import type { UserRow } from '../../lib/manager.api';
 import './ManagerUsers.css';
@@ -27,11 +29,13 @@ export function ManagerUsers() {
   const [toast, setToast] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState>({ kind: 'none' });
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
 
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('WAITER');
+  const [originalRole, setOriginalRole] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
 
@@ -64,7 +68,7 @@ export function ManagerUsers() {
     setEdit({ kind: 'add' });
     setUsername(''); setFullName(''); setEmail('');
     setPassword(''); setPin('');
-    setRole('WAITER');
+    setRole('WAITER'); setOriginalRole('');
   }
 
   function beginEdit(u: UserRow) {
@@ -72,7 +76,8 @@ export function ManagerUsers() {
     setUsername(u.username);
     setFullName(u.fullName);
     setEmail(u.email ?? '');
-    setRole(u.role);
+    setRole(u.role); setOriginalRole(u.role);
+    setPassword(''); setPin('');
   }
 
   function beginPassword(u: UserRow) {
@@ -88,16 +93,27 @@ export function ManagerUsers() {
   }
 
   async function submitAdd() {
-    setSaving(true);
     setError(null);
     const payload: any = {
       username: username.trim(),
       fullName: fullName.trim(),
       email: email.trim() || undefined,
       role,
-      password,
     };
-    if (pin.trim()) payload.pin = pin.trim();
+    if (role === 'WAITER') {
+      if (!/^\d{4}$/.test(pin.trim())) {
+        setError('Enter a 4-digit PIN for this waiter.');
+        return;
+      }
+      payload.pin = pin.trim();
+    } else {
+      if (!password) {
+        setError('Enter a password for this user.');
+        return;
+      }
+      payload.password = password;
+    }
+    setSaving(true);
     const res = await createUser(payload);
     setSaving(false);
     if (!res.ok) { setError(res.errorMessage ?? 'Create failed'); return; }
@@ -109,13 +125,28 @@ export function ManagerUsers() {
 
   async function submitEdit() {
     if (edit.kind !== 'edit') return;
-    setSaving(true);
     setError(null);
-    const res = await updateUser(edit.id, {
+    const payload: any = {
       fullName: fullName.trim(),
       email: email.trim() || undefined,
       role,
-    });
+    };
+    if (role === 'WAITER' && originalRole !== 'WAITER') {
+      if (!/^\d{4}$/.test(pin.trim())) {
+        setError('Enter a 4-digit PIN to switch this user to waiter.');
+        return;
+      }
+      payload.pin = pin.trim();
+    }
+    if (role !== 'WAITER' && originalRole === 'WAITER') {
+      if (!password) {
+        setError('Enter a new password for this user.');
+        return;
+      }
+      payload.password = password;
+    }
+    setSaving(true);
+    const res = await updateUser(edit.id, payload);
     setSaving(false);
     if (!res.ok) { setError(res.errorMessage ?? 'Update failed'); return; }
     setToast('User updated');
@@ -149,6 +180,15 @@ export function ManagerUsers() {
     await load();
   }
 
+  async function handleActivate(u: UserRow) {
+    if (!confirm(`Activate "${u.username}"?`)) return;
+    const res = await activateUser(u.id);
+    if (!res.ok) { setError(res.errorMessage ?? 'Activate failed'); return; }
+    setToast('User activated');
+    setTimeout(() => setToast(null), 2000);
+    await load();
+  }
+
   async function handleDeactivate(u: UserRow) {
     if (!confirm(`Deactivate "${u.username}"?`)) return;
     const res = await deactivateUser(u.id);
@@ -163,9 +203,21 @@ export function ManagerUsers() {
     return target.role !== 'ADMIN' && target.role !== 'MANAGER';
   }
 
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) =>
+      u.username.toLowerCase().includes(q) ||
+      u.fullName.toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q) ||
+      (u.isActive ? 'active' : 'inactive').includes(q),
+    );
+  }, [users, query]);
+
   return (
     <div className="page manager-page">
-      <div className="manager-users-header">
+      <div className="manager-page-header">
         <h2>Users</h2>
         {edit.kind === 'none' && (
           <button className="manager-refresh" onClick={beginAdd}>
@@ -173,6 +225,15 @@ export function ManagerUsers() {
           </button>
         )}
       </div>
+
+      {users && users.length > 0 && (
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search users by name, role or status…"
+          count={`${filteredUsers.length} of ${users.length}`}
+        />
+      )}
 
       {edit.kind === 'add' && (
         <div className="manager-user-form">
@@ -190,12 +251,20 @@ export function ManagerUsers() {
               {allowedRoles.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
-          <label>Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} />
-          </label>
-          {role === 'WAITER' && (
+          {role === 'WAITER' ? (
             <label>PIN (4 digits)
-              <input value={pin} onChange={(e) => setPin(e.target.value)} maxLength={4} placeholder="optional" style={{ width: '80px' }} />
+              <input
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                maxLength={4}
+                inputMode="numeric"
+                placeholder="1234"
+                style={{ width: '100px' }}
+              />
+            </label>
+          ) : (
+            <label>Password
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} />
             </label>
           )}
           <div className="actions">
@@ -221,6 +290,23 @@ export function ManagerUsers() {
               {allowedRoles.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
+          {role === 'WAITER' && originalRole !== 'WAITER' && (
+            <label>PIN (4 digits)
+              <input
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                maxLength={4}
+                inputMode="numeric"
+                placeholder="1234"
+                style={{ width: '100px' }}
+              />
+            </label>
+          )}
+          {role !== 'WAITER' && originalRole === 'WAITER' && (
+            <label>New password
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} />
+            </label>
+          )}
           <div className="actions">
             <button className="primary" onClick={submitEdit} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
             <button onClick={resetForm} disabled={saving}>Cancel</button>
@@ -271,7 +357,12 @@ export function ManagerUsers() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => {
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted" style={{ textAlign: 'center' }}>No users match your search.</td>
+                  </tr>
+                )}
+                {filteredUsers.map((u) => {
                   const editable = canActOn(u);
                   return (
                     <tr key={u.id}>
@@ -286,9 +377,10 @@ export function ManagerUsers() {
                       <td>
                         <div className="manager-row-actions">
                           {editable && <button onClick={() => beginEdit(u)}>Edit</button>}
-                          {editable && <button onClick={() => beginPassword(u)}>Reset PW</button>}
+                          {editable && u.role !== 'WAITER' && <button onClick={() => beginPassword(u)}>Reset PW</button>}
                           {editable && u.role === 'WAITER' && <button onClick={() => beginPin(u)}>PIN</button>}
                           {editable && u.isActive && <button className="danger" onClick={() => handleDeactivate(u)}>Deactivate</button>}
+                          {editable && !u.isActive && <button onClick={() => handleActivate(u)}>Activate</button>}
                         </div>
                       </td>
                     </tr>

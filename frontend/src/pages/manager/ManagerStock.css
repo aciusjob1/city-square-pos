@@ -1,22 +1,8 @@
-.manager-stock-header {
-  display: flex;
-  justify-content: space-between;
+.manager-stock-addform .manager-stock-check {
+  flex-direction: row;
   align-items: center;
-  margin-bottom: 16px;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.manager-stock-header h2 {
-  margin: 0;
-}
-
-.manager-stock-pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  gap: 8px;
+  padding-bottom: 8px;
 }
 
 .manager-stock-ok {
@@ -32,6 +18,18 @@
 .manager-stock-out {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.manager-stock-unavailable {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.manager-stock-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .manager-stock-inline {
@@ -67,4 +65,38 @@
 .manager-stock-inline button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.manager-stock-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.manager-stock-tab {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.manager-stock-tab-active,
+.manager-stock-tab-active:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.manager-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }

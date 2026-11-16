@@ -10,8 +10,11 @@
  *     saying "Session expired".
  */
 
+import { loginPathForTerminal } from './terminal';
+
 const BASE = '/api';
 const TOKEN_KEY = 'cs_auth_token';
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 // Endpoints where a 401 means "wrong credentials", not "session expired"
 const LOGIN_ENDPOINTS = ['/auth/login', '/auth/login-pin'];
@@ -23,12 +26,18 @@ export interface ApiResult<T> {
   errorMessage: string | null;
 }
 
+/** RequestInit plus a per-call timeout for slow operations (backups, etc.). */
+export interface ApiOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiOptions = {},
 ): Promise<ApiResult<T>> {
-  const headers = new Headers(options.headers ?? {});
-  if (!headers.has('Content-Type') && options.body) {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: externalSignal, ...init } = options;
+  const headers = new Headers(init.headers ?? {});
+  if (!headers.has('Content-Type') && init.body) {
     headers.set('Content-Type', 'application/json');
   }
   const token = localStorage.getItem(TOKEN_KEY);
@@ -36,16 +45,31 @@ export async function apiFetch<T>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+
   let response: Response;
   try {
-    response = await fetch(`${BASE}${path}`, { ...options, headers });
+    response = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
   } catch {
+    const timedOut = controller.signal.aborted && !externalSignal?.aborted;
     return {
       ok: false,
       status: 0,
       data: null,
-      errorMessage: 'Network error — is the backend running?',
+      errorMessage: timedOut
+        ? 'The server did not respond. Check the network connection and try again.'
+        : 'Network error — is the backend running?',
     };
+  } finally {
+    window.clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 
   let body: unknown = null;
@@ -74,8 +98,9 @@ export async function apiFetch<T>(
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('cs_auth_user');
     localStorage.removeItem('cs_auth_exp');
-    if (window.location.pathname !== '/login') {
-      window.location.replace('/login');
+    const loginPath = loginPathForTerminal();
+    if (window.location.pathname !== loginPath) {
+      window.location.replace(loginPath);
     }
     return {
       ok: false,
@@ -86,10 +111,15 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    const message =
-      (body && typeof body === 'object' && 'message' in body
-        ? String((body as Record<string, unknown>).message)
-        : null) ?? `Request failed (${response.status})`;
+    const raw =
+      body && typeof body === 'object' && 'message' in body
+        ? (body as Record<string, unknown>).message
+        : null;
+    const message = Array.isArray(raw)
+      ? raw.map(String).join('; ')
+      : raw != null && raw !== ''
+        ? String(raw)
+        : `Request failed (${response.status})`;
     return { ok: false, status: response.status, data: null, errorMessage: message };
   }
 

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
+import { DEFAULT_LOGO, useBranding } from '../branding/BrandingContext';
 import './LoginPage.css';
 
 export function WaiterLoginPage() {
   const { user, loginPin } = useAuth();
+  const { branding } = useBranding();
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,8 +71,12 @@ export function WaiterLoginPage() {
     <main className="login-page">
       <section className="login-card">
         <header className="login-header">
-          <div className="brand-icon">CS</div>
-          <h1>City Square</h1>
+          <img
+            src={branding.restaurantLogo ?? DEFAULT_LOGO}
+            alt={`${branding.restaurantName} logo`}
+            className="brand-logo"
+          />
+          <h1>{branding.restaurantName}</h1>
           <p>Waiter Terminal</p>
         </header>
 
@@ -123,7 +129,11 @@ export function WaiterLoginPage() {
             <span className="status-dot" />
             Online
           </span>
-          <span>Waiter Access</span>
+          <span>
+            <Link to="/about" className="login-about-link">About</Link>
+            <span aria-hidden="true"> · </span>
+            Waiter Access
+          </span>
         </footer>
       </section>
     </main>

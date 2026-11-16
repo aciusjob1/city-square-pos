@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
-import {
-  listOrdersForCashier,
-  requestBill,
-  getOrder,
-  mergeOrders,
-  unmergeBillGroup,
-  printConsolidatedBill,
-  getBillGroup,
-} from '../../lib/waiter.api';
-import type { FullOrder, BillGroupDetail } from '../../lib/waiter.api';
+import { Link } from 'react-router-dom';
+import { listOrdersForCashier } from '../../lib/waiter.api';
+import { getSalesSummary } from '../../lib/reports.api';
+import type { SalesSummary } from '../../lib/reports.api';
+import { getDayStatus, closeDay, openDay, rolloverDay } from '../../lib/day.api';
+import type { DayStatus } from '../../lib/day.api';
 import './CashierHome.css';
+
+const TZ = 'Africa/Dar_es_Salaam';
 
 interface OrderRow {
   id: string;
@@ -19,21 +16,27 @@ interface OrderRow {
   orderType: string;
   totalAmount: string;
   currency: string;
-  clientCreatedAt: string;
   serverCreatedAt: string;
   closedAt: string | null;
-  billGroupId?: string | null;
   waiter: { username: string; fullName: string };
 }
 
-type Filter = 'open' | 'closed' | 'all';
+function businessToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
 
 function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const n = new Date();
-  return d.getFullYear() === n.getFullYear() &&
-    d.getMonth() === n.getMonth() &&
-    d.getDate() === n.getDate();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso)) === businessToday();
 }
 
 function timeAgo(iso: string): string {
@@ -45,408 +48,233 @@ function timeAgo(iso: string): string {
 }
 
 export function CashierHome() {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
+  const [todaySales, setTodaySales] = useState<SalesSummary | null>(null);
+  const [day, setDay] = useState<DayStatus | null>(null);
+  const [dayBusy, setDayBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>('open');
-  const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [details, setDetails] = useState<Record<string, FullOrder>>({});
-  const [detailsLoading, setDetailsLoading] = useState<Record<string, boolean>>({});
-  const [billBusy, setBillBusy] = useState<Record<string, boolean>>({});
-  const [toast, setToast] = useState<string | null>(null);
-
-  // Merge state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [merging, setMerging] = useState(false);
-  const [billGroups, setBillGroups] = useState<Record<string, BillGroupDetail>>({});
-  const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
+    setLoading(true);
     setError(null);
-    const r = await listOrdersForCashier();
-    if (r.ok && r.data) {
-      setOrders(r.data.orders as OrderRow[]);
+    const today = businessToday();
+    const [ordersRes, salesRes, dayRes] = await Promise.all([
+      listOrdersForCashier({ limit: 100 }),
+      getSalesSummary(today, today),
+      getDayStatus(),
+    ]);
+
+    if (ordersRes.ok && ordersRes.data) {
+      setOrders(
+        (ordersRes.data.orders as OrderRow[]).filter((o) => o.status !== 'CANCELLED'),
+      );
     } else {
-      setError(r.errorMessage ?? 'Failed to load orders');
+      setError(ordersRes.errorMessage ?? 'Failed to load orders');
     }
+    if (salesRes.ok && salesRes.data) setTodaySales(salesRes.data);
+    if (dayRes.ok && dayRes.data) setDay(dayRes.data);
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 3500);
-    return () => window.clearTimeout(t);
-  }, [toast]);
-
-  // Fetch bill-group details for any open orders that belong to one
-  useEffect(() => {
-    if (!orders) return;
-    const groupIds = new Set<string>();
-    for (const o of orders) {
-      if (o.billGroupId && !billGroups[o.billGroupId]) groupIds.add(o.billGroupId);
+  const onDayAction = async (action: 'close' | 'open' | 'rollover') => {
+    if (
+      action !== 'open' &&
+      !window.confirm(
+        action === 'close'
+          ? 'Close the business day?'
+          : 'Close the current day and open a new one?',
+      )
+    ) {
+      return;
     }
-    for (const gid of groupIds) {
-      getBillGroup(gid).then((r) => {
-        if (r.ok && r.data) {
-          setBillGroups((g) => ({ ...g, [gid]: r.data! }));
-        }
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders]);
-
-  const counts = useMemo(() => {
-    if (!orders) return { open: 0, closed: 0, all: 0 };
-    return {
-      open: orders.filter((o) => !o.closedAt).length,
-      closed: orders.filter((o) => o.closedAt && isToday(o.closedAt)).length,
-      all: orders.length,
-    };
-  }, [orders]);
-
-  const filtered = useMemo(() => {
-    if (!orders) return [];
-    let list = orders;
-    if (filter === 'open') list = list.filter((o) => !o.closedAt);
-    else if (filter === 'closed') list = list.filter((o) => o.closedAt && isToday(o.closedAt));
-
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter((o) =>
-        o.orderNumber.toLowerCase().includes(q) ||
-        o.waiter.fullName.toLowerCase().includes(q) ||
-        o.waiter.username.toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [orders, filter, query]);
-
-  // Grouped view: hide orders that belong to a bill group, show group row instead
-  const visibleRows = useMemo(() => {
-    const grouped = new Set<string>();
-    const rows: Array<{ kind: 'single'; order: OrderRow } | { kind: 'group'; groupId: string; orders: OrderRow[] }> = [];
-    for (const o of filtered) {
-      if (o.billGroupId) {
-        if (grouped.has(o.billGroupId)) continue;
-        grouped.add(o.billGroupId);
-        const groupOrders = filtered.filter((x) => x.billGroupId === o.billGroupId);
-        rows.push({ kind: 'group', groupId: o.billGroupId, orders: groupOrders });
-      } else {
-        rows.push({ kind: 'single', order: o });
+    setDayBusy(true);
+    const call = (force: boolean) => action === 'close'
+      ? closeDay(force)
+      : action === 'open'
+        ? openDay()
+        : rolloverDay(force);
+    let r = await call(false);
+    if (!r.ok && r.status === 409) {
+      if (window.confirm(`${r.errorMessage}\n\nProceed anyway?`)) {
+        r = await call(true);
       }
     }
-    return rows;
-  }, [filtered]);
-
-  const toggleSelect = (orderId: string) => {
-    setSelectedIds((s) => {
-      const next = new Set(s);
-      if (next.has(orderId)) next.delete(orderId);
-      else next.add(orderId);
-      return next;
-    });
+    setDayBusy(false);
+    if (r.ok && r.data) setDay(r.data);
+    else if (!r.ok) setError(r.errorMessage ?? 'Day action failed');
   };
 
-  const selectedOrders = orders?.filter((o) => selectedIds.has(o.id)) ?? [];
-  const selectedTotal = selectedOrders.reduce((s, o) => s + parseFloat(o.totalAmount), 0);
-  const selectedCurrency = selectedOrders[0]?.currency ?? 'TZS';
+  const currency = orders?.[0]?.currency ?? todaySales?.currency ?? 'TZS';
 
-  const onMerge = async () => {
-    if (selectedIds.size < 2) return;
-    setMerging(true);
-    const r = await mergeOrders(Array.from(selectedIds));
-    setMerging(false);
-    if (r.ok && r.data) {
-      setToast(`Merged ${r.data.orderCount} orders into one bill group`);
-      setSelectedIds(new Set());
-      await load();
-    } else {
-      setToast(r.errorMessage ?? 'Merge failed');
-    }
-  };
+  const openOrders = useMemo(
+    () => (orders ?? []).filter((o) => !o.closedAt),
+    [orders],
+  );
+  const closedToday = useMemo(
+    () => (orders ?? []).filter((o) => o.closedAt && isToday(o.closedAt)),
+    [orders],
+  );
 
-  const onUnmerge = async (billGroupId: string) => {
-    setGroupBusy((b) => ({ ...b, [billGroupId]: true }));
-    const r = await unmergeBillGroup(billGroupId);
-    setGroupBusy((b) => ({ ...b, [billGroupId]: false }));
-    if (r.ok) {
-      setToast('Bill group dissolved');
-      setBillGroups((g) => {
-        const copy = { ...g };
-        delete copy[billGroupId];
-        return copy;
-      });
-      await load();
-    } else {
-      setToast(r.errorMessage ?? 'Unmerge failed');
-    }
-  };
+  const openTotal = openOrders.reduce((s, o) => s + parseFloat(o.totalAmount), 0);
+  const closedTotal = closedToday.reduce((s, o) => s + parseFloat(o.totalAmount), 0);
+  const recentOpen = [...openOrders]
+    .sort((a, b) => new Date(b.serverCreatedAt).getTime() - new Date(a.serverCreatedAt).getTime())
+    .slice(0, 5);
 
-  const onPrintConsolidated = async (billGroupId: string) => {
-    setGroupBusy((b) => ({ ...b, [billGroupId]: true }));
-    const r = await printConsolidatedBill(billGroupId);
-    setGroupBusy((b) => ({ ...b, [billGroupId]: false }));
-    if (r.ok && r.data) {
-      setToast(`Consolidated bill printed · ${r.data.currency} ${parseInt(r.data.grandTotal, 10).toLocaleString()}`);
-      setBillGroups((g) => {
-        const copy = { ...g };
-        delete copy[billGroupId];
-        return copy;
-      });
-      await load();
-    } else {
-      setToast(r.errorMessage ?? 'Print failed');
-    }
-  };
-
-  const onToggleDetails = async (orderId: string) => {
-    if (expandedId === orderId) { setExpandedId(null); return; }
-    setExpandedId(orderId);
-    if (!details[orderId]) {
-      setDetailsLoading((s) => ({ ...s, [orderId]: true }));
-      const r = await getOrder(orderId);
-      setDetailsLoading((s) => ({ ...s, [orderId]: false }));
-      if (r.ok && r.data) setDetails((d) => ({ ...d, [orderId]: r.data! }));
-      else setToast(r.errorMessage ?? 'Failed to load details');
-    }
-  };
-
-  const onPrintBill = async (orderId: string) => {
-    setBillBusy((b) => ({ ...b, [orderId]: true }));
-    const r = await requestBill(orderId);
-    setBillBusy((b) => ({ ...b, [orderId]: false }));
-    if (r.ok && r.data) {
-      setToast(r.data.reprint ? 'Bill re-printed' : 'Bill sent to printer');
-      await load();
-    } else {
-      setToast(r.errorMessage ?? 'Bill failed');
-    }
-  };
+  const money = (value: string | number) =>
+    `${currency} ${Math.round(Number(value)).toLocaleString()}`;
 
   return (
-    <div className="cashier-page">
-      <header className="cashier-header">
+    <div className="page cashier-home">
+      <header className="cashier-home-header">
         <div>
-          <h1>Cashier</h1>
-          <p className="cashier-subtitle">
-            {user?.fullName} · Today, {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <h1>Cashier Home</h1>
+          <p className="subtitle">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+            {' · '}
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <button className="cashier-refresh" onClick={load}>↻ Refresh</button>
+        <button className="cashier-home-refresh" onClick={load} disabled={loading}>
+          {loading ? '↻ Loading…' : '↻ Refresh'}
+        </button>
       </header>
 
-      <div className="cashier-search">
-        <input
-          type="text"
-          placeholder="Search order number, waiter or table…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-
-      <div className="cashier-tabs">
-        <button className={filter === 'open' ? 'active' : ''} onClick={() => setFilter('open')}>
-          Open <span className="count">{counts.open}</span>
-        </button>
-        <button className={filter === 'closed' ? 'active' : ''} onClick={() => setFilter('closed')}>
-          Closed today <span className="count">{counts.closed}</span>
-        </button>
-        <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-          All <span className="count">{counts.all}</span>
-        </button>
-      </div>
-
-      {selectedIds.size >= 2 && (
-        <div className="merge-bar">
-          <div className="merge-bar-info">
-            <strong>{selectedIds.size} orders selected</strong>
-            <span>Combined: {selectedCurrency} {Math.round(selectedTotal).toLocaleString()}</span>
-          </div>
-          <div className="merge-bar-actions">
-            <button
-              className="merge-bar-btn"
-              onClick={onMerge}
-              disabled={merging}
-            >
-              {merging ? 'Merging…' : 'Merge into one bill'}
-            </button>
-            <button
-              className="merge-bar-cancel"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {error && <div className="error">{error}</div>}
-      {!orders && !error && <p className="muted" style={{ marginTop: 24 }}>Loading…</p>}
-      {orders && visibleRows.length === 0 && (
-        <p className="muted" style={{ marginTop: 24 }}>No orders in this view.</p>
+
+      {day && (
+        <section className="cashier-day">
+          <div className="cashier-day-info">
+            <span className={`cashier-day-dot${day.openDay ? ' open' : ' closed'}`} aria-hidden="true" />
+            <span className="cashier-day-title">
+              {day.openDay
+                ? `Business day open · ${day.openDay.businessDate}`
+                : 'Business day closed'}
+            </span>
+            <span className="cashier-day-mode">
+              {day.mode === 'AUTO' ? 'Automatic rollover' : 'Manual rollover'}
+            </span>
+            {day.openDay && (
+              <span className="cashier-day-sub">
+                {money(day.openDay.summary.totalSales)} · {day.openDay.summary.orderCount} orders
+              </span>
+            )}
+          </div>
+          <div className="cashier-day-actions">
+            {day.openDay ? (
+              <>
+                <button onClick={() => onDayAction('close')} disabled={dayBusy}>Close day</button>
+                <button onClick={() => onDayAction('rollover')} disabled={dayBusy}>Roll over</button>
+              </>
+            ) : (
+              <button onClick={() => onDayAction('open')} disabled={dayBusy}>Open day</button>
+            )}
+          </div>
+        </section>
       )}
 
-      {orders && visibleRows.length > 0 && (
-        <div className="cashier-list">
-          {visibleRows.map((row) => {
-            if (row.kind === 'single') {
-              const o = row.order;
-              const isOpen = !o.closedAt;
-              const isExpanded = expandedId === o.id;
-              const detail = details[o.id];
-              const isLoading = detailsLoading[o.id];
-              const isSelected = selectedIds.has(o.id);
+      <div className="cashier-kpis">
+        <Link to="/cashier/orders" className="cashier-kpi">
+          <span className="cashier-kpi-label">Open bills</span>
+          <span className="cashier-kpi-value">{openOrders.length}</span>
+          <span className="cashier-kpi-sub">{money(openTotal)} outstanding</span>
+        </Link>
+        <Link to="/cashier/orders" className="cashier-kpi">
+          <span className="cashier-kpi-label">Closed today</span>
+          <span className="cashier-kpi-value">{closedToday.length}</span>
+          <span className="cashier-kpi-sub">{money(closedTotal)} billed</span>
+        </Link>
+        <Link to="/reports" className="cashier-kpi">
+          <span className="cashier-kpi-label">Today's sales</span>
+          <span className="cashier-kpi-value">
+            {todaySales ? money(todaySales.summary.totalSales) : '—'}
+          </span>
+          <span className="cashier-kpi-sub">
+            {todaySales ? `${todaySales.summary.itemCount} items sold` : 'Reports unavailable'}
+          </span>
+        </Link>
+        <Link to="/reports" className="cashier-kpi">
+          <span className="cashier-kpi-label">Today's orders</span>
+          <span className="cashier-kpi-value">
+            {todaySales ? todaySales.summary.orderCount : '—'}
+          </span>
+          <span className="cashier-kpi-sub">
+            {todaySales ? `Avg ${money(todaySales.summary.avgOrderValue)}` : ' '}
+          </span>
+        </Link>
+      </div>
 
-              return (
-                <div className={`cashier-row${isExpanded ? ' expanded' : ''}`} key={o.id}>
-                  <div className="cashier-row-inner">
-                    {isOpen && (
-                      <label className="cashier-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(o.id)}
-                        />
-                      </label>
-                    )}
-                    <button className="cashier-row-header" onClick={() => onToggleDetails(o.id)}>
-                      <div className="row-main">
-                        <span className="order-num">{o.orderNumber}</span>
-                        <span className="order-total">{o.currency} {parseInt(o.totalAmount, 10).toLocaleString()}</span>
-                      </div>
-                      <div className="row-meta">
-                        <span className={`order-badge ${isOpen ? 'badge-open' : 'badge-closed'}`}>
-                          {isOpen ? 'Open' : 'Closed'}
-                        </span>
-                        <span>{o.waiter.fullName}</span>
-                        {o.orderType === 'TAKEAWAY' && <span>Takeaway</span>}
-                        <span className="time-ago">{timeAgo(o.serverCreatedAt)}</span>
-                      </div>
-                    </button>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="cashier-details">
-                      {isLoading && <p className="muted">Loading details…</p>}
-                      {detail && (
-                        <>
-                          <div className="detail-row"><span>Table</span><span>{detail.table?.name ?? 'Takeaway'}</span></div>
-                          <div className="detail-row"><span>Waiter</span><span>{detail.waiter.fullName}</span></div>
-                          <div className="detail-sep" />
-                          {detail.items.map((it) => (
-                            <div className="detail-row" key={it.id}>
-                              <span>{it.quantity}× {it.productName}</span>
-                              <span>{detail.currency} {parseInt(it.lineTotal, 10).toLocaleString()}</span>
-                            </div>
-                          ))}
-                          <div className="detail-sep" />
-                          <div className="detail-row detail-total">
-                            <span>TOTAL</span>
-                            <span>{detail.currency} {parseInt(detail.totalAmount, 10).toLocaleString()}</span>
-                          </div>
-                          {isOpen && (
-                            <button
-                              className="cashier-print-btn"
-                              onClick={() => onPrintBill(o.id)}
-                              disabled={!!billBusy[o.id]}
-                            >
-                              {billBusy[o.id] ? 'Printing…' : 'Print Bill'}
-                            </button>
-                          )}
-                          {!isOpen && (
-                            <p className="muted" style={{ textAlign: 'center', marginTop: 12 }}>
-                              Bill printed at {new Date(o.closedAt!).toLocaleTimeString()}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            // Group row
-            const groupId = row.groupId;
-            const groupOrders = row.orders;
-            const detail = billGroups[groupId];
-            const grandTotal = detail?.grandTotal ?? groupOrders.reduce((s, o) => s + parseFloat(o.totalAmount), 0).toFixed(2);
-            const currency = groupOrders[0]?.currency ?? 'TZS';
-            const allOpen = groupOrders.every((o) => !o.closedAt);
-            const busy = groupBusy[groupId];
-
-            return (
-              <div className="cashier-row cashier-row-group" key={groupId}>
-                <div className="cashier-group-header">
-                  <div className="row-main">
-                    <span className="order-num">
-                      {groupOrders.map((o) => o.orderNumber).join(' + ')}
-                    </span>
-                    <span className="order-total">{currency} {parseInt(grandTotal, 10).toLocaleString()}</span>
-                  </div>
-                  <div className="row-meta">
-                    <span className="order-badge badge-group">{groupOrders.length} orders · Bill group</span>
-                    <span>{groupOrders.map((o) => o.waiter.fullName).join(', ')}</span>
-                  </div>
-                </div>
-
-                <div className="cashier-group-body">
-                  {groupOrders.map((o) => (
-                    <div className="cashier-group-order" key={o.id}>
-                      <div className="group-order-line">
-                        <span className="group-order-num">{o.orderNumber}</span>
-                        <span className="group-order-waiter">{o.waiter.fullName}</span>
-                        <span className="group-order-total">{currency} {parseInt(o.totalAmount, 10).toLocaleString()}</span>
-                      </div>
-                      <button className="group-order-expand" onClick={() => onToggleDetails(o.id)}>
-                        {expandedId === o.id ? '▾ Hide items' : '▸ Show items'}
-                      </button>
-                      {expandedId === o.id && details[o.id] && (
-                        <div className="cashier-details-inline">
-                          {details[o.id].items.map((it) => (
-                            <div className="detail-row" key={it.id}>
-                              <span>{it.quantity}× {it.productName}</span>
-                              <span>{currency} {parseInt(it.lineTotal, 10).toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  <div className="group-grand-total">
-                    <span>GRAND TOTAL</span>
-                    <span>{currency} {parseInt(grandTotal, 10).toLocaleString()}</span>
-                  </div>
-
-                  {allOpen && (
-                    <div className="group-actions">
-                      <button
-                        className="group-print-btn"
-                        onClick={() => onPrintConsolidated(groupId)}
-                        disabled={busy}
-                      >
-                        {busy ? 'Printing…' : 'Print Consolidated Bill'}
-                      </button>
-                      <button
-                        className="group-unmerge-btn"
-                        onClick={() => onUnmerge(groupId)}
-                        disabled={busy}
-                      >
-                        Unmerge
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      <section className="cashier-quick">
+        <h2>Quick actions</h2>
+        <div className="cashier-quick-grid">
+          <Link to="/cashier/orders" className="cashier-quick-card">
+            <span className="cashier-quick-title">Orders &amp; Bills</span>
+            <span className="cashier-quick-desc">
+              Merge orders, print bills and close tables.
+            </span>
+          </Link>
+          <Link to="/reports" className="cashier-quick-card">
+            <span className="cashier-quick-title">Sales Reports</span>
+            <span className="cashier-quick-desc">
+              Product and waiter totals for any period.
+            </span>
+          </Link>
+          <Link to="/print-jobs" className="cashier-quick-card">
+            <span className="cashier-quick-title">Print Jobs</span>
+            <span className="cashier-quick-desc">
+              Check kitchen, bar and receipt tickets.
+            </span>
+          </Link>
+          <Link to="/cashier/sold-out" className="cashier-quick-card">
+            <span className="cashier-quick-title">Sold Out</span>
+            <span className="cashier-quick-desc">
+              Mark items unavailable when the kitchen runs out.
+            </span>
+          </Link>
         </div>
-      )}
+      </section>
 
-      {toast && <div className="toast">{toast}</div>}
+      <section className="cashier-open-section">
+        <div className="cashier-open-head">
+          <h2>Open bills</h2>
+          <Link to="/cashier/orders" className="cashier-open-all">
+            View all {openOrders.length > 0 ? `(${openOrders.length})` : ''}
+          </Link>
+        </div>
+
+        {!orders && !error && <p className="muted">Loading…</p>}
+        {orders && recentOpen.length === 0 && (
+          <p className="muted">No open bills right now.</p>
+        )}
+        {recentOpen.length > 0 && (
+          <div className="cashier-open-list">
+            {recentOpen.map((o) => (
+              <Link to="/cashier/orders" className="cashier-open-row" key={o.id}>
+                <div className="cashier-open-main">
+                  <span className="cashier-open-number">{o.orderNumber}</span>
+                  <span className="cashier-open-waiter">{o.waiter.fullName}</span>
+                </div>
+                <div className="cashier-open-meta">
+                  <span className="cashier-open-amount">{money(o.totalAmount)}</span>
+                  <span className="cashier-open-time">{timeAgo(o.serverCreatedAt)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+        {openOrders.length > recentOpen.length && (
+          <p className="muted">
+            Showing the latest {recentOpen.length} of {openOrders.length} open bills.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

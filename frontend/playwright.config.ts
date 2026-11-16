@@ -18,7 +18,7 @@ export default defineConfig({
   reporter: 'list',
   timeout: 30_000,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.TEST_BASE_URL || 'http://localhost:5173',
     trace: 'off',
     launchOptions: {
       executablePath: CHROMIUM_PATH,

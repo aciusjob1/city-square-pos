@@ -39,7 +39,8 @@ test.describe('Users CRUD (manager + admin)', () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body.users)).toBe(true);
-    expect(body.users.length).toBeGreaterThanOrEqual(7);
+    // Seed provisions admin, manager, cashier1, kitchen-test, john, fatma.
+    expect(body.users.length).toBeGreaterThanOrEqual(6);
     expect(body.users.find((u: any) => u.username === 'admin')).toBeTruthy();
   });
 
@@ -68,7 +69,7 @@ test.describe('Users CRUD (manager + admin)', () => {
     expect(created.role).toBe('CASHIER');
   });
 
-  test('manager can create a waiter', async ({ request }) => {
+  test('manager can create a waiter with a PIN only', async ({ request }) => {
     const token = await loginAs(request, 'manager', 'manager123');
     const res = await request.post(`${API}/users`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -76,10 +77,26 @@ test.describe('Users CRUD (manager + admin)', () => {
         username: `test-user-waiter-${stamp}`,
         fullName: 'Test Waiter',
         role: 'WAITER',
-        password: 'TestPass123',
+        pin: '4321',
       },
     });
     expect([200, 201]).toContain(res.status());
+
+    const pinLogin = await request.post(`${API}/auth/login-pin`, { data: { pin: '4321' } });
+    expect([200, 201]).toContain(pinLogin.status());
+  });
+
+  test('waiter without a PIN is rejected', async ({ request }) => {
+    const token = await loginAs(request, 'manager', 'manager123');
+    const res = await request.post(`${API}/users`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        username: `test-user-nopin-${stamp}`,
+        fullName: 'No PIN Waiter',
+        role: 'WAITER',
+      },
+    });
+    expect(res.status()).toBe(400);
   });
 
   test('manager cannot create an admin', async ({ request }) => {
@@ -227,5 +244,39 @@ test.describe('Users CRUD (manager + admin)', () => {
       headers: { Authorization: `Bearer ${userToken}` },
     });
     expect(after.status()).toBe(401);
+  });
+
+  test('admin can activate a deactivated user', async ({ request }) => {
+    const adminToken = await loginAs(request, 'admin', 'admin123');
+    const username = `test-user-revive-${stamp}`;
+    const createRes = await request.post(`${API}/users`, {
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      data: {
+        username,
+        fullName: 'Revive User',
+        role: 'CASHIER',
+        password: 'TestPass123',
+      },
+    });
+    const created = await createRes.json();
+
+    const delRes = await request.delete(`${API}/users/${created.id}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(delRes.status()).toBe(200);
+
+    const blocked = await request.post(`${API}/auth/login`, {
+      data: { username, password: 'TestPass123' },
+    });
+    expect(blocked.status()).toBe(401);
+
+    const activate = await request.patch(`${API}/users/${created.id}/activate`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(activate.status()).toBe(200);
+    expect((await activate.json()).isActive).toBe(true);
+
+    const revivedToken = await loginAs(request, username, 'TestPass123');
+    expect(revivedToken).toBeTruthy();
   });
 });

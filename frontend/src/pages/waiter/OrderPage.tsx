@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { PageSearch } from '../../components/PageSearch';
 import {
   listCategories, listProducts, getActiveOrderForTable, getOrder,
   createOrder, appendItems, uuid,
 } from '../../lib/waiter.api';
 import type { CategoryRow, ProductRow, FullOrder } from '../../lib/waiter.api';
-
-type CartLine = { productId: string; quantity: number };
 
 export function OrderPage() {
   const { tableId: routeParam } = useParams<{ tableId: string }>();
@@ -28,8 +27,8 @@ export function OrderPage() {
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  const activeCategory = categories[0]?.id;
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   // ---- Load catalog + existing order ----
   useEffect(() => {
@@ -68,10 +67,15 @@ export function OrderPage() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const productsForCategory = useMemo(
-    () => products.filter((p) => !selectedCategoryId || p.categoryId === selectedCategoryId),
-    [products, selectedCategoryId],
-  );
+  const productsForCategory = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q) {
+      return products.filter((p) =>
+        p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q),
+      );
+    }
+    return products.filter((p) => !selectedCategoryId || p.categoryId === selectedCategoryId);
+  }, [products, selectedCategoryId, query]);
 
   const cartLines: Array<{ product: ProductRow; qty: number }> = useMemo(() => {
     const out: Array<{ product: ProductRow; qty: number }> = [];
@@ -89,7 +93,7 @@ export function OrderPage() {
     0,
   );
 
-  const tableLabel = activeOrder?.table?.name ?? 'Table';
+  const tableLabel = isTakeaway ? 'Takeaway' : (activeOrder?.table?.name ?? 'Table');
 
   const setQty = (productId: string, next: number) => {
     setCart((c) => {
@@ -101,43 +105,51 @@ export function OrderPage() {
   };
 
   const onSend = async () => {
-    if (!tableId || cartLines.length === 0 || sending) return;
+    if ((!tableId && !isTakeaway) || cartLines.length === 0 || sending) return;
     setSending(true);
     setToast(null);
 
-    const payloadItems = cartLines.map((l) => ({
-      productId: l.product.id,
-      quantity: l.qty,
-    }));
+    try {
+      const payloadItems = cartLines.map((l) => ({
+        productId: l.product.id,
+        quantity: l.qty,
+      }));
 
-    // Takeaway: always a new order, no table. Table order: append if active, else create.
-    let res;
-    if (activeOrder && !isTakeaway) {
-      res = await appendItems(activeOrder.id, { clientUuid: uuid(), items: payloadItems });
-    } else if (isTakeaway) {
-      res = await createOrder({
-        clientUuid: uuid(),
-        orderType: 'TAKEAWAY',
-        items: payloadItems,
-      });
-    } else {
-      res = await createOrder({
-        clientUuid: uuid(),
-        tableId: tableId!,
-        orderType: 'DINE_IN',
-        items: payloadItems,
-      });
-    }
+      // Takeaway: always a new order, no table. Table order: append if active, else create.
+      let res;
+      if (activeOrder && !isTakeaway) {
+        res = await appendItems(activeOrder.id, { clientUuid: uuid(), items: payloadItems });
+      } else if (isTakeaway) {
+        res = await createOrder({
+          clientUuid: uuid(),
+          orderType: 'TAKEAWAY',
+          items: payloadItems,
+        });
+      } else {
+        res = await createOrder({
+          clientUuid: uuid(),
+          tableId: tableId!,
+          orderType: 'DINE_IN',
+          items: payloadItems,
+        });
+      }
 
-    setSending(false);
-    if (!res.ok || !res.data) {
-      setToast({ kind: 'err', text: res.errorMessage ?? 'Send failed' });
-      return;
+      if (!res.ok || !res.data) {
+        setToast({ kind: 'err', text: res.errorMessage ?? 'Send failed' });
+        return;
+      }
+      setActiveOrder(res.data);
+      setCart({});
+      setCartOpen(false);
+      setToast({ kind: 'ok', text: 'Sent to kitchen' });
+    } catch (error) {
+      setToast({
+        kind: 'err',
+        text: `Could not send the order: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setSending(false);
     }
-    setActiveOrder(res.data);
-    setCart({});
-    setCartOpen(false);
-    setToast({ kind: 'ok', text: 'Sent to kitchen' });
   };
 
   const sentItems = activeOrder?.items ?? [];
@@ -161,7 +173,6 @@ export function OrderPage() {
                   <span className="qty">{it.quantity}×</span>
                   {it.productName}
                 </span>
-                <span className="muted">Sent</span>
               </div>
             ))}
           </div>
@@ -182,6 +193,17 @@ export function OrderPage() {
             </button>
           ))}
         </div>
+
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search the menu by product name or SKU…"
+          count={query.trim() ? `${productsForCategory.length} found` : undefined}
+        />
+
+        {query.trim() && productsForCategory.length === 0 && (
+          <p className="muted">No menu items match your search.</p>
+        )}
 
         <div className="product-list">
           {productsForCategory.map((p) => {

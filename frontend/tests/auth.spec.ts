@@ -31,12 +31,13 @@ test.describe('Staff login (username + password)', () => {
     await expect(page).toHaveURL(/\/manager/);
   });
 
-  test('cashier login lands on cashier', async ({ page }) => {
+  test('cashier login lands on cashier home', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Username').fill('cashier1');
     await page.getByLabel('Password').fill('waiter123');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/\/cashier/);
+    await expect(page).toHaveURL(/\/cashier$/);
+    await expect(page.getByRole('heading', { name: 'Cashier Home' })).toBeVisible();
   });
 
   test('manager login lands on manager', async ({ page }) => {
@@ -69,6 +70,29 @@ test.describe('Staff login (username + password)', () => {
     await expect(page).toHaveURL(/\/manager/);
   });
 
+  test('dormant session signs out automatically', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/login');
+    await page.getByLabel('Username').fill('admin');
+    await page.getByLabel('Password').fill('admin123');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/manager/);
+
+    // One minute before the 15-minute timeout the warning appears.
+    await page.clock.fastForward('14:00');
+    const warning = page.locator('.idle-warning');
+    await expect(warning).toBeVisible();
+
+    await warning.getByRole('button', { name: 'Stay signed in' }).click();
+    await page.clock.fastForward('10:00');
+    await expect(page).toHaveURL(/\/manager/);
+
+    await page.clock.fastForward('15:00');
+    await expect(page).toHaveURL(/\/login/);
+    const token = await page.evaluate(() => localStorage.getItem('cs_auth_token'));
+    expect(token).toBeNull();
+  });
+
   test('waiter cannot access staff pages (role enforcement)', async ({ page }) => {
     // Login as waiter via PIN
     await page.goto('/w/login');
@@ -83,6 +107,9 @@ test.describe('Staff login (username + password)', () => {
     await expect(page).toHaveURL(/\/waiter/);
 
     await page.goto('/cashier');
+    await expect(page).toHaveURL(/\/waiter/);
+
+    await page.goto('/cashier/orders');
     await expect(page).toHaveURL(/\/waiter/);
 
     await page.goto('/kitchen');

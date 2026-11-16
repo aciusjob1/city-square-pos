@@ -1,0 +1,208 @@
+.about-page {
+  max-width: 760px;
+  padding: 28px 20px 64px;
+}
+
+.about-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.07);
+  padding: 28px;
+}
+
+.about-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.about-logo {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(140deg, #2563eb, #1e40af);
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  object-fit: cover;
+}
+
+.about-logo-img {
+  background: #f3f4f6;
+}
+
+.about-header h1 {
+  font-size: 1.35rem;
+  letter-spacing: -0.3px;
+  margin: 0 0 4px;
+}
+
+.about-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.about-owner {
+  padding: 24px 0 8px;
+}
+
+.about-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #2563eb;
+  margin-bottom: 6px;
+}
+
+.about-owner h2 {
+  font-size: 1.55rem;
+  letter-spacing: -0.4px;
+  margin: 0 0 8px;
+}
+
+.about-owner p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+  max-width: 56ch;
+}
+
+.about-contact {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 8px;
+  padding: 0;
+}
+
+.about-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #111827;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.about-contact-row:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.about-contact-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  color: #2563eb;
+}
+
+.about-contact-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.about-contact-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.about-contact-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.about-contact-value {
+  font-size: 0.98rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.about-contact-arrow {
+  margin-left: auto;
+  color: #9ca3af;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.about-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #f3f4f6;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.about-back {
+  font-weight: 600;
+}
+
+@media (min-width: 720px) {
+  .about-contact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .about-page {
+    padding: 16px 14px 48px;
+  }
+
+  .about-card {
+    padding: 20px 16px;
+    border-radius: 14px;
+  }
+
+  .about-header {
+    gap: 12px;
+  }
+
+  .about-logo {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+    font-size: 1.15rem;
+  }
+
+  .about-header h1 {
+    font-size: 1.15rem;
+  }
+
+  .about-owner h2 {
+    font-size: 1.3rem;
+  }
+
+  .about-contact-row {
+    padding: 12px;
+    gap: 12px;
+  }
+}

@@ -24,6 +24,38 @@ test.describe('Waiter ordering flow', () => {
     await expect(page.getByText('Table 10', { exact: true })).toBeVisible();
   });
 
+  test('table search filters the grid', async ({ page }) => {
+    await loginAsWaiter(page);
+    const search = page.getByPlaceholder('Search tables by name or status…');
+    await expect(search).toBeVisible();
+    await search.fill('Table 5');
+    await expect(page.locator('.table-card')).toHaveCount(1);
+    await expect(page.locator('.table-card')).toContainText('Table 5');
+  });
+
+  test('menu search finds products across categories', async ({ page }) => {
+    await loginAsWaiter(page);
+    await page.getByRole('link', { name: /New Takeaway Order/ }).click();
+    await expect(page.getByText(/Taking order/)).toBeVisible();
+    await expect(page.locator('.product-card').first()).toBeVisible();
+
+    const search = page.getByPlaceholder('Search the menu by product name or SKU…');
+    await expect(search).toBeVisible();
+    await search.fill('Chipsi kavu');
+    await expect(page.locator('.product-card').filter({ hasText: 'Chipsi kavu' })).toHaveCount(1);
+    await expect(page.locator('.product-card').filter({ hasText: 'Ugali dona' })).toHaveCount(0);
+
+    await search.fill('zzzz-no-menu-match');
+    await expect(page.getByText('No menu items match your search.')).toBeVisible();
+  });
+
+  test('Print Jobs opens from the waiter tables screen', async ({ page }) => {
+    await loginAsWaiter(page);
+    await page.getByRole('link', { name: 'Print Jobs' }).click();
+    await expect(page).toHaveURL(/\/print-jobs$/);
+    await expect(page.getByRole('heading', { name: 'Print Jobs' })).toBeVisible();
+  });
+
   test('tapping a table opens the order page', async ({ page }) => {
     await loginAsWaiter(page);
     await page.getByText('Table 2', { exact: true }).click();
@@ -46,9 +78,10 @@ test.describe('Waiter ordering flow', () => {
 
     const sentBefore = await page.locator('.sent-item').count();
 
-    // Add two items
-    await page.getByRole('button', { name: /Increase Ugali/ }).click();
-    await page.getByRole('button', { name: /Increase Chips/ }).click();
+    // Add two items (both live under the BUFFET category)
+    await page.locator('.category-tab', { hasText: 'BUFFET' }).click();
+    await page.getByRole('button', { name: /Increase Ugali dona/ }).click();
+    await page.getByRole('button', { name: /Increase Chipsi kavu/ }).click();
     await expect(page.locator('.cart-bar .items-count')).toContainText('2 items');
 
     // Send
@@ -67,6 +100,31 @@ test.describe('Waiter ordering flow', () => {
     await expect(page.getByRole('button', { name: 'Print bill' }).first()).toBeVisible();
   });
 
+  test('an order can be sent where crypto.randomUUID is unavailable (LAN http)', async ({ page }) => {
+    // On a plain-HTTP LAN address (http://192.168.x.x) the browser hides
+    // crypto.randomUUID. The app must still generate a client UUID and send.
+    await page.addInitScript(() => {
+      Object.defineProperty(Crypto.prototype, 'randomUUID', {
+        value: undefined,
+        configurable: true,
+      });
+    });
+
+    await loginAsWaiter(page);
+    expect(await page.evaluate(() => typeof (crypto as any).randomUUID)).toBe('undefined');
+    await page.getByRole('link', { name: /New Takeaway Order/ }).click();
+    await expect(page.getByText(/Taking order/)).toBeVisible();
+    await expect(page.locator('.product-card').first()).toBeVisible();
+
+    await page.locator('.category-tab', { hasText: 'BUFFET' }).click();
+    await page.getByRole('button', { name: /Increase Ugali dona/ }).click();
+    await expect(page.locator('.cart-bar .items-count')).toContainText('1 item');
+
+    await page.locator('.cart-bar').click();
+    await page.getByRole('button', { name: 'Send to kitchen' }).click();
+    await expect(page.locator('.toast')).toContainText('Sent to kitchen');
+  });
+
   test('returning to an active table shows already-sent items', async ({ page }) => {
     await loginAsWaiter(page);
 
@@ -75,7 +133,8 @@ test.describe('Waiter ordering flow', () => {
     await expect(page.getByText(/Taking order/)).toBeVisible();
     await expect(page.locator('.product-card').first()).toBeVisible();
 
-    await page.getByRole('button', { name: /Increase Ugali/ }).click();
+    await page.locator('.category-tab', { hasText: 'BUFFET' }).click();
+    await page.getByRole('button', { name: /Increase Ugali dona/ }).click();
     await expect(page.locator('.cart-bar .items-count')).toContainText('1 item');
 
     await page.locator('.cart-bar').click();

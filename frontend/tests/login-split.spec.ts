@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const API = 'http://localhost:3000/api';
+
 test.describe('Login split (staff vs waiter)', () => {
   test('/login exposes only staff form', async ({ page }) => {
     await page.goto('/login');
@@ -50,5 +52,43 @@ test.describe('Login split (staff vs waiter)', () => {
     await expect(page).toHaveURL(/\/manager/);
     await page.goto('/w/login');
     await expect(page).toHaveURL(/\/manager/);
+  });
+
+  test('login screens and top bar render the configured restaurant branding', async ({ page, request }) => {
+    const login = await request.post(`${API}/auth/login`, {
+      data: { username: 'manager', password: 'manager123' },
+    });
+    const token = (await login.json()).accessToken;
+    const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    const branding = await (await request.get(`${API}/settings/branding`)).json();
+    await page.goto('/login');
+    await expect(page.locator('.login-header h1')).toHaveText(branding.restaurantName);
+    await page.goto('/w/login');
+    await expect(page.locator('.login-header h1')).toHaveText(branding.restaurantName);
+
+    const before = (await (await request.get(`${API}/settings`, { headers: auth })).json())
+      .settings.restaurantLogo as string | null;
+    const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await request.patch(`${API}/settings`, { headers: auth, data: { restaurant_logo: logo } });
+
+    try {
+      await page.goto('/login');
+      await expect(page.locator('.brand-logo')).toBeVisible();
+      await page.goto('/w/login');
+      await expect(page.locator('.brand-logo')).toBeVisible();
+
+      await page.goto('/login');
+      await page.getByLabel('Username').fill('manager');
+      await page.getByLabel('Password').fill('manager123');
+      await page.getByRole('button', { name: /sign in/i }).click();
+      await expect(page).toHaveURL(/\/manager$/, { timeout: 10000 });
+      await expect(page.locator('.topbar-logo-img')).toBeVisible();
+    } finally {
+      await request.patch(`${API}/settings`, {
+        headers: auth,
+        data: { restaurant_logo: before ?? null },
+      });
+    }
   });
 });

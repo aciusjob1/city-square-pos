@@ -13,7 +13,7 @@ async function loginAs(request: any, username: string, password: string): Promis
 async function seedKitchenOrder(
   request: any,
   opts: { includeBarItem?: boolean } = {},
-): Promise<{ orderId: string; kitchenProductName: string; barProductName: string | null }> {
+): Promise<{ orderId: string; orderNumber: string; kitchenProductName: string; barProductName: string | null }> {
   const waiterToken = await loginAs(request, 'john', 'waiter123');
 
   const tablesRes = await request.get(`${API}/tables`, {
@@ -56,6 +56,7 @@ async function seedKitchenOrder(
 
   return {
     orderId: order.id,
+    orderNumber: order.orderNumber,
     kitchenProductName: kitchenProduct.name,
     barProductName: barProduct?.name ?? null,
   };
@@ -82,7 +83,7 @@ test.describe('Kitchen display (read-only)', () => {
   });
 
   test('pending kitchen order appears with its items', async ({ page, request }) => {
-    const { kitchenProductName } = await seedKitchenOrder(request);
+    const { orderNumber, kitchenProductName } = await seedKitchenOrder(request);
 
     await page.goto('/login');
     await page.getByLabel('Username').fill('kitchen-test');
@@ -90,7 +91,7 @@ test.describe('Kitchen display (read-only)', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/kitchen$/, { timeout: 10000 });
 
-    const card = page.locator('.kitchen-card').filter({ hasText: kitchenProductName }).first();
+    const card = page.locator('.kitchen-card').filter({ hasText: orderNumber });
     await expect(card).toBeVisible({ timeout: 10000 });
     await expect(card.locator('.kitchen-items')).toContainText(kitchenProductName);
     await expect(card.locator('.kitchen-qty').first()).toContainText('2');
@@ -98,7 +99,7 @@ test.describe('Kitchen display (read-only)', () => {
   });
 
   test('only KITCHEN-station items appear (BAR excluded)', async ({ page, request }) => {
-    const { kitchenProductName, barProductName } = await seedKitchenOrder(request, { includeBarItem: true });
+    const { orderNumber, kitchenProductName, barProductName } = await seedKitchenOrder(request, { includeBarItem: true });
     if (!barProductName) {
       test.skip(true, 'No BAR product in seed data');
       return;
@@ -110,13 +111,10 @@ test.describe('Kitchen display (read-only)', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/kitchen$/, { timeout: 10000 });
 
-    await expect(
-      page.locator('.kitchen-card').filter({ hasText: kitchenProductName }).first(),
-    ).toBeVisible({ timeout: 10000 });
-
-    await expect(
-      page.locator('.kitchen-card').filter({ hasText: barProductName }),
-    ).toHaveCount(0);
+    const card = page.locator('.kitchen-card').filter({ hasText: orderNumber });
+    await expect(card).toBeVisible({ timeout: 10000 });
+    await expect(card).toContainText(kitchenProductName);
+    await expect(card).not.toContainText(barProductName);
   });
 
   test('kitchen cannot modify orders (role enforcement)', async ({ request }) => {

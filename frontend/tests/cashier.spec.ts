@@ -5,10 +5,30 @@ async function loginAsCashier(page: import('@playwright/test').Page) {
   await page.getByLabel('Username').fill('cashier1');
   await page.getByLabel('Password').fill('waiter123');
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/cashier/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/cashier$/, { timeout: 10000 });
+}
+
+async function openCashierOrders(page: import('@playwright/test').Page) {
+  await loginAsCashier(page);
+  await page.getByRole('link', { name: 'Orders', exact: true }).click();
+  await expect(page).toHaveURL(/\/cashier\/orders$/);
+  await expect(page.getByRole('heading', { name: 'Orders & Bills' })).toBeVisible();
 }
 
 test.describe('Cashier dashboard', () => {
+  test('cashier home shows KPIs and quick actions', async ({ page }) => {
+    await loginAsCashier(page);
+    await expect(page.getByRole('heading', { name: 'Cashier Home' })).toBeVisible();
+    await expect(page.locator('.cashier-kpi')).toHaveCount(4);
+    const quick = page.locator('.cashier-quick-grid');
+    await expect(quick.getByRole('link', { name: /Orders & Bills/ })).toBeVisible();
+    await expect(quick.getByRole('link', { name: /Sales Reports/ })).toBeVisible();
+    await expect(quick.getByRole('link', { name: /Print Jobs/ })).toBeVisible();
+
+    await page.locator('.cashier-kpi').first().click();
+    await expect(page).toHaveURL(/\/cashier\/orders$/);
+  });
+
   test('cashier expands an order, prints bill, order moves to Closed', async ({ page, request }) => {
     // 1) Create a fresh order via API so the test always has one open order
     const loginRes = await request.post('http://localhost:3000/api/auth/login', {
@@ -45,11 +65,10 @@ test.describe('Cashier dashboard', () => {
     expect(orderBody.orderNumber).toMatch(/^CS-/);
 
     // 2) Now perform the test via UI
-    await loginAsCashier(page);
-    await expect(page.getByRole('heading', { name: 'Cashier' })).toBeVisible();
+    await openCashierOrders(page);
 
     // Ensure the order we created is visible in Open
-    await page.getByRole('button', { name: /^Open/ }).click();
+    await page.locator('.cashier-tabs').getByRole('button', { name: /^Open/ }).click();
     await expect(page.locator('.cashier-row').first()).toBeVisible();
 
     // Find our specific order by order number
@@ -69,12 +88,12 @@ test.describe('Cashier dashboard', () => {
     await page.reload();
 
     // Order is no longer in Open filter
-    await page.getByRole('button', { name: /^Open/ }).click();
+    await page.locator('.cashier-tabs').getByRole('button', { name: /^Open/ }).click();
     await page.locator('.cashier-search input').fill(orderBody.orderNumber);
     await expect(page.locator('.cashier-row')).toHaveCount(0);
 
     // And it IS in All filter
-    await page.getByRole('button', { name: /^All/ }).click();
+    await page.locator('.cashier-tabs').getByRole('button', { name: /^All/ }).click();
     await page.locator('.cashier-search input').fill(orderBody.orderNumber);
     await expect(page.locator('.cashier-row').first()).toBeVisible();
 
@@ -84,8 +103,7 @@ test.describe('Cashier dashboard', () => {
   });
 
   test('search filters by order number', async ({ page }) => {
-    await loginAsCashier(page);
-    await expect(page.getByRole('heading', { name: 'Cashier' })).toBeVisible();
+    await openCashierOrders(page);
 
     await page.locator('.cashier-tabs button', { hasText: 'All' }).click();
     await expect(page.locator('.cashier-row').first()).toBeVisible();

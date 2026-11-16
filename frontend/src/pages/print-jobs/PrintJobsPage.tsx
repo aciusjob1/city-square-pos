@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { PageSearch } from '../../components/PageSearch';
 import { listPrintJobs } from '../../lib/waiter.api';
 import type { PrintJobFull } from '../../lib/waiter.api';
 
@@ -212,15 +213,32 @@ function ThermalTicket({ job }: { job: PrintJobFull }) {
   );
 }
 
+const TZ = 'Africa/Dar_es_Salaam';
+
+function todayISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 export function PrintJobsPage() {
   const [jobs, setJobs] = useState<PrintJobFull[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [query, setQuery] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const today = todayISO();
 
-  const load = async () => {
+  const load = async (rangeFrom = from, rangeTo = to) => {
     setError(null);
     const r = await listPrintJobs({
       station: filter === 'ALL' ? undefined : filter,
+      from: rangeFrom || undefined,
+      to: rangeTo || undefined,
       limit: 200,
     });
     if (r.ok && r.data) setJobs(r.data.printJobs);
@@ -228,6 +246,30 @@ export function PrintJobsPage() {
   };
 
   useEffect(() => { load(); }, [filter]);
+
+  const applyRange = (nextFrom: string, nextTo: string) => {
+    if (nextFrom && nextTo && nextFrom > nextTo) {
+      setError('Start date must be on or before end date.');
+      return;
+    }
+    setFrom(nextFrom);
+    setTo(nextTo);
+    void load(nextFrom, nextTo);
+  };
+
+  const visibleJobs = useMemo(() => {
+    if (!jobs) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return jobs;
+    return jobs.filter((j) =>
+      j.ticket_type.toLowerCase().includes(q) ||
+      j.status.toLowerCase().includes(q) ||
+      j.order_number.toLowerCase().includes(q) ||
+      (j.table_name ?? '').toLowerCase().includes(q) ||
+      j.waiter_full_name.toLowerCase().includes(q) ||
+      (j.printer_name ?? '').toLowerCase().includes(q),
+    );
+  }, [jobs, query]);
 
   return (
     <div className="page">
@@ -246,8 +288,52 @@ export function PrintJobsPage() {
             {f === 'ALL' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}
           </button>
         ))}
-        <button className="category-tab" onClick={load}>↻ Refresh</button>
+        <button className="category-tab" onClick={() => load()}>↻ Refresh</button>
       </div>
+
+      <div className="date-range-bar">
+        <label>
+          From
+          <input
+            type="date"
+            value={from}
+            max={today}
+            onChange={(e) => applyRange(e.target.value, to)}
+          />
+        </label>
+        <label>
+          To
+          <input
+            type="date"
+            value={to}
+            max={today}
+            onChange={(e) => applyRange(from, e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className={from === today && to === today ? 'active' : ''}
+          onClick={() => applyRange(today, today)}
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          className={!from && !to ? 'active' : ''}
+          onClick={() => applyRange('', '')}
+        >
+          All dates
+        </button>
+      </div>
+
+      {jobs && jobs.length > 0 && (
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by order, table, waiter, printer or status…"
+          count={`${visibleJobs.length} of ${jobs.length}`}
+        />
+      )}
 
       {error && <div className="error">{error}</div>}
       {!jobs && !error && <p className="muted" style={{ marginTop: 24 }}>Loading…</p>}
@@ -255,9 +341,13 @@ export function PrintJobsPage() {
         <p className="muted" style={{ marginTop: 24 }}>No print jobs found.</p>
       )}
 
-      {jobs && jobs.length > 0 && (
+      {jobs && jobs.length > 0 && visibleJobs.length === 0 && (
+        <p className="muted" style={{ marginTop: 24 }}>No print jobs match your search.</p>
+      )}
+
+      {visibleJobs.length > 0 && (
         <div className="print-jobs-grid">
-          {jobs.map((j) => (
+          {visibleJobs.map((j) => (
             <div key={j.id} className="print-job-wrapper">
               <div className="print-job-header">
                 <span>
@@ -278,6 +368,11 @@ export function PrintJobsPage() {
                 </span>
                 <span>{new Date(j.created_at).toLocaleString()}</span>
               </div>
+              {j.last_error && (
+                <div style={{ fontSize: 12, color: '#991b1b', padding: '0 12px 8px' }}>
+                  Printer error: {j.last_error}
+                </div>
+              )}
               <ThermalTicket job={j} />
             </div>
           ))}

@@ -1,12 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { PageSearch } from '../../components/PageSearch';
 import {
   listCategoriesFull,
   createCategory,
   updateCategory,
   deactivateCategory,
 } from '../../lib/manager.api';
-import type { CategoryRow } from '../../lib/manager.api';
-import './ManagerCategories.css';
+import type { CategoryRow, CategoryPrinterStation } from '../../lib/manager.api';
+
+const PRINTER_LABELS: Record<CategoryPrinterStation, string> = {
+  KITCHEN: 'Kitchen printer',
+  BAR: 'Bar printer',
+  NONE: 'Receipt printer',
+};
 
 type EditState =
   | { kind: 'none' }
@@ -20,7 +26,9 @@ export function ManagerCategories() {
   const [edit, setEdit] = useState<EditState>({ kind: 'none' });
   const [name, setName] = useState('');
   const [sortOrder, setSortOrder] = useState('0');
+  const [printerStation, setPrinterStation] = useState<'' | CategoryPrinterStation>('');
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
 
   async function load() {
     const res = await listCategoriesFull();
@@ -38,18 +46,21 @@ export function ManagerCategories() {
     setEdit({ kind: 'none' });
     setName('');
     setSortOrder('0');
+    setPrinterStation('');
   }
 
   function beginAdd() {
     setEdit({ kind: 'add' });
     setName('');
     setSortOrder('0');
+    setPrinterStation('');
   }
 
   function beginEdit(c: CategoryRow) {
     setEdit({ kind: 'edit', id: c.id });
     setName(c.name);
     setSortOrder(String(c.sortOrder));
+    setPrinterStation(c.printerStation ?? '');
   }
 
   async function submit() {
@@ -59,6 +70,7 @@ export function ManagerCategories() {
     const payload = {
       name: name.trim(),
       sortOrder: parseInt(sortOrder || '0', 10) || 0,
+      printerStation: printerStation === '' ? null : printerStation,
     };
     const res = edit.kind === 'add'
       ? await createCategory(payload)
@@ -88,9 +100,16 @@ export function ManagerCategories() {
     await load();
   }
 
+  const filteredCategories = useMemo(() => {
+    if (!categories) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.name.toLowerCase().includes(q));
+  }, [categories, query]);
+
   return (
     <div className="page manager-page">
-      <div className="manager-categories-header">
+      <div className="manager-page-header">
         <h2>Categories</h2>
         {edit.kind === 'none' && (
           <button className="manager-refresh" onClick={beginAdd}>
@@ -98,6 +117,15 @@ export function ManagerCategories() {
           </button>
         )}
       </div>
+
+      {categories && categories.length > 0 && (
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search categories…"
+          count={`${filteredCategories.length} of ${categories.length}`}
+        />
+      )}
 
       {edit.kind !== 'none' && (
         <div className="manager-cat-form">
@@ -121,6 +149,22 @@ export function ManagerCategories() {
               style={{ width: '100px' }}
             />
           </label>
+          <label>
+            Printer
+            <select
+              value={printerStation}
+              onChange={(e) => setPrinterStation(e.target.value as '' | CategoryPrinterStation)}
+            >
+              <option value="">Product default (no override)</option>
+              <option value="KITCHEN">Kitchen printer</option>
+              <option value="BAR">Bar printer</option>
+              <option value="NONE">Receipt printer</option>
+            </select>
+          </label>
+          <p className="muted manager-cat-hint">
+            Items in this category print at the chosen station. “Receipt printer” sends no
+            kitchen/bar ticket — the items appear only on the customer receipt.
+          </p>
           <div className="actions">
             <button className="primary" onClick={submit} disabled={saving}>
               {saving ? 'Saving…' : 'Save'}
@@ -145,14 +189,25 @@ export function ManagerCategories() {
               <tr>
                 <th>Name</th>
                 <th>Sort order</th>
+                <th>Printer</th>
                 <th style={{ width: '160px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((c) => (
+              {filteredCategories.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="muted" style={{ textAlign: 'center' }}>No categories match your search.</td>
+                </tr>
+              )}
+              {filteredCategories.map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td>{c.sortOrder}</td>
+                  <td>
+                    {c.printerStation
+                      ? PRINTER_LABELS[c.printerStation]
+                      : <span className="muted">Product default</span>}
+                  </td>
                   <td>
                     <div className="manager-row-actions">
                       <button onClick={() => beginEdit(c)}>Edit</button>

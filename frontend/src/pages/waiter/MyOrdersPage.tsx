@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PageSearch } from '../../components/PageSearch';
 import {
   listMyOrders,
   requestBill,
@@ -23,6 +24,17 @@ interface OrderRow {
   waiter: { username: string; fullName: string };
 }
 
+const TZ = 'Africa/Dar_es_Salaam';
+
+function todayISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 export function MyOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,19 +43,40 @@ export function MyOrdersPage() {
   const [detailsLoading, setDetailsLoading] = useState<Record<string, boolean>>({});
   const [billBusy, setBillBusy] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const today = todayISO();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [merging, setMerging] = useState(false);
   const [billGroups, setBillGroups] = useState<Record<string, BillGroupDetail>>({});
+  // Groups merged with another waiter's orders are hidden from waiters, so the
+  // combined total is unknown here; avoid presenting our own subtotal as it.
+  const [restrictedGroups, setRestrictedGroups] = useState<Set<string>>(new Set());
 
-  const load = async () => {
+  const load = async (rangeFrom = from, rangeTo = to) => {
     setError(null);
-    const r = await listMyOrders();
+    const r = await listMyOrders({
+      limit: 100,
+      from: rangeFrom || undefined,
+      to: rangeTo || undefined,
+    });
     if (r.ok && r.data) setOrders(r.data.orders as OrderRow[]);
     else setError(r.errorMessage ?? 'Failed to load orders');
   };
 
   useEffect(() => { load(); }, []);
+
+  const applyRange = (nextFrom: string, nextTo: string) => {
+    if (nextFrom && nextTo && nextFrom > nextTo) {
+      setError('Start date must be on or before end date.');
+      return;
+    }
+    setFrom(nextFrom);
+    setTo(nextTo);
+    void load(nextFrom, nextTo);
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -61,6 +94,8 @@ export function MyOrdersPage() {
       getBillGroup(gid).then((r) => {
         if (r.ok && r.data) {
           setBillGroups((g) => ({ ...g, [gid]: r.data! }));
+        } else if (r.status === 403) {
+          setRestrictedGroups((s) => new Set(s).add(gid));
         }
       });
     }
@@ -120,27 +155,83 @@ export function MyOrdersPage() {
     }
   };
 
-  const visibleRows = useMemo(() => {
+  const filteredOrders = useMemo(() => {
     if (!orders) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) =>
+      o.orderNumber.toLowerCase().includes(q) ||
+      o.status.toLowerCase().includes(q) ||
+      o.orderType.toLowerCase().includes(q) ||
+      o.waiter.fullName.toLowerCase().includes(q) ||
+      o.waiter.username.toLowerCase().includes(q),
+    );
+  }, [orders, query]);
+
+  const visibleRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Array<{ kind: 'single'; order: OrderRow } | { kind: 'group'; groupId: string; orders: OrderRow[] }> = [];
-    for (const o of orders) {
+    for (const o of filteredOrders) {
       if (o.billGroupId) {
         if (seenGroups.has(o.billGroupId)) continue;
         seenGroups.add(o.billGroupId);
-        const groupOrders = orders.filter((x) => x.billGroupId === o.billGroupId);
+        const groupOrders = filteredOrders.filter((x) => x.billGroupId === o.billGroupId);
         rows.push({ kind: 'group', groupId: o.billGroupId, orders: groupOrders });
       } else {
         rows.push({ kind: 'single', order: o });
       }
     }
     return rows;
-  }, [orders]);
+  }, [filteredOrders]);
 
   return (
     <div className="page">
       <h1>My Orders</h1>
       <p className="subtitle">Orders you have placed</p>
+
+      <div className="date-range-bar">
+        <label>
+          From
+          <input
+            type="date"
+            value={from}
+            max={today}
+            onChange={(e) => applyRange(e.target.value, to)}
+          />
+        </label>
+        <label>
+          To
+          <input
+            type="date"
+            value={to}
+            max={today}
+            onChange={(e) => applyRange(from, e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className={from === today && to === today ? 'active' : ''}
+          onClick={() => applyRange(today, today)}
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          className={!from && !to ? 'active' : ''}
+          onClick={() => applyRange('', '')}
+        >
+          All dates
+        </button>
+      </div>
+
+      {orders && orders.length > 0 && (
+        <PageSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search orders by number, status or type…"
+          count={`${filteredOrders.length} of ${orders.length}`}
+        />
+      )}
 
       {selectedIds.size >= 2 && (
         <div className="merge-bar">
@@ -169,7 +260,9 @@ export function MyOrdersPage() {
       {error && <div className="error">{error}</div>}
       {!orders && !error && <p className="muted" style={{ marginTop: 24 }}>Loading…</p>}
       {orders && visibleRows.length === 0 && (
-        <p className="muted" style={{ marginTop: 24 }}>No orders yet.</p>
+        <p className="muted" style={{ marginTop: 24 }}>
+          {query.trim() ? 'No orders match your search.' : 'No orders yet.'}
+        </p>
       )}
 
       {orders && visibleRows.length > 0 && (
@@ -227,10 +320,6 @@ export function MyOrdersPage() {
                                 <span>Table</span>
                                 <span>{detail.table?.name ?? 'Takeaway'}</span>
                               </div>
-                              <div className="detail-line">
-                                <span>Waiter</span>
-                                <span>{detail.waiter.fullName}</span>
-                              </div>
                               <div className="detail-sep" />
                               {detail.items.map((it) => (
                                 <div className="detail-line" key={it.id}>
@@ -275,6 +364,7 @@ export function MyOrdersPage() {
 
             const groupId = row.groupId;
             const groupOrders = row.orders;
+            const restricted = restrictedGroups.has(groupId);
             const detail = billGroups[groupId];
             const grandTotal = detail?.grandTotal ?? groupOrders.reduce((s, o) => s + parseFloat(o.totalAmount), 0).toFixed(2);
             const currency = groupOrders[0]?.currency ?? 'TZS';
@@ -306,13 +396,14 @@ export function MyOrdersPage() {
                 </div>
 
                 <div className="group-grand-total">
-                  <span>Combined total</span>
+                  <span>{restricted ? 'Your orders total' : 'Combined total'}</span>
                   <span>{currency} {parseInt(grandTotal, 10).toLocaleString()}</span>
                 </div>
 
                 <div className="group-footer">
-                  {groupOrders.length} {groupOrders.length === 1 ? 'order' : 'orders'} · Your orders
-                  {awaitingCashier ? ' · Not yet finalized' : ' · Bill printed'}
+                  {restricted
+                    ? `${groupOrders.length} of your ${groupOrders.length === 1 ? 'order' : 'orders'} · combined bill at cashier`
+                    : `${groupOrders.length} ${groupOrders.length === 1 ? 'order' : 'orders'}${awaitingCashier ? '' : ' · Bill printed'}`}
                 </div>
               </div>
             );

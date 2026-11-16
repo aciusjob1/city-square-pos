@@ -1,10 +1,13 @@
-.manager-tabs {
-  max-width: 900px;
+.manager-shell {
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 16px 16px 0;
+  padding: 0 20px;
+}
+
+.manager-tabs {
+  padding: 16px 0 0;
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -14,49 +17,536 @@
 }
 
 .manager-tab {
-  display: inline-block;
-  padding: 10px 14px;
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 8px 15px;
+  font-size: 0.87rem;
   font-weight: 600;
   color: #6b7280;
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.manager-tab-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  opacity: 0.85;
+}
+
+.manager-sidebar-toggle {
+  display: none;
 }
 
 .manager-tab:hover {
   color: #111827;
+  border-color: #d1d5db;
   text-decoration: none;
 }
 
-.manager-tab-active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+.manager-tab-active,
+.manager-tab-active:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
 }
 
-.manager-placeholder {
-  padding: 40px 16px;
-  text-align: center;
+.manager-content {
+  min-width: 0;
 }
 
-/* Mobile: tighter tab padding so more tabs fit; subtle right-edge shadow hints scrollability */
-@media (max-width: 639px) {
+/* Desktop: the tab row becomes a persistent left rail.
+   Old monitors and Windows display scaling can report a CSS width below
+   1024px on a perfectly normal desktop, so a fine pointer (mouse/trackpad)
+   gets the rail at any width. Touch devices keep the horizontal pills. */
+@media (min-width: 1024px), (hover: hover) and (pointer: fine) {
+  .manager-shell {
+    display: grid;
+    grid-template-columns: 224px minmax(0, 1fr);
+    gap: 28px;
+    padding: 0 28px;
+    align-items: start;
+    transition: grid-template-columns 0.18s ease;
+  }
+
+  .manager-shell-collapsed {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
   .manager-tabs {
-    padding: 12px 12px 0;
+    position: sticky;
+    top: 88px;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    flex-direction: column;
+    gap: 2px;
+    padding: 28px 0;
+  }
+
+  .manager-tab {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border-color: transparent;
+    background: transparent;
+    color: #4b5563;
+  }
+
+  .manager-tab:hover {
+    background: #fff;
+    border-color: #e5e7eb;
+    color: #111827;
+  }
+
+  .manager-tab-active,
+  .manager-tab-active:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+  }
+
+  .manager-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+    align-self: flex-end;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #6b7280;
+    cursor: pointer;
+  }
+
+  .manager-sidebar-toggle:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+  }
+
+  .manager-sidebar-toggle svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.18s ease;
+  }
+
+  .manager-shell-collapsed .manager-sidebar-toggle {
+    align-self: center;
+    padding: 4px;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .manager-shell-collapsed .manager-sidebar-toggle svg {
+    transform: rotate(180deg);
+  }
+
+  .manager-shell-collapsed .manager-tab {
+    justify-content: center;
+    gap: 0;
+    padding: 10px 0;
+  }
+
+  .manager-shell-collapsed .manager-tab-label {
+    display: none;
+  }
+
+  .manager-shell-collapsed .manager-tab-icon {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+    opacity: 1;
+  }
+}
+
+/* Narrow desktop windows: tighter rail, and the topbar has two rows there
+   (links wrap), so keep the sticky rail clear of it. */
+@media (max-width: 1023px) and (hover: hover) and (pointer: fine) {
+  .manager-shell { gap: 18px; padding: 0 18px; }
+  .manager-tabs { padding: 20px 0; }
+}
+
+@media (min-width: 1024px) and (max-width: 1099px),
+       (max-width: 1023px) and (hover: hover) and (pointer: fine) {
+  .manager-tabs {
+    top: 122px;
+    max-height: calc(100vh - 134px);
+  }
+}
+
+/* Touch phones: the row stays horizontal and compact. */
+@media (max-width: 639px) {
+  .manager-shell { padding: 0 14px; }
+}
+
+@media (max-width: 639px) and (hover: none), (max-width: 639px) and (pointer: coarse) {
+  .manager-tabs {
+    padding: 12px 0 0;
+    gap: 4px;
   }
   .manager-tab {
-    padding: 8px 10px;
-    font-size: 0.82rem;
+    min-height: 38px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+  }
+
+  .manager-tab-icon {
+    display: none;
   }
 }
 
-.manager-tabs {
-  background:
-    linear-gradient(to right, #f9fafb 30%, rgba(249, 250, 251, 0)) left center,
-    linear-gradient(to left, #f9fafb 30%, rgba(249, 250, 251, 0)) right center;
-  background-repeat: no-repeat;
-  background-size: 20px 100%, 20px 100%;
-  background-attachment: local, local;
+/* ---------- Shared manager page primitives ---------- */
+
+.manager-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 0 80px;
+  overflow-x: hidden;
+}
+
+@media (min-width: 1024px) {
+  .manager-page { max-width: none; }
+}
+
+.manager-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manager-page-header h1 {
+  font-size: 1.6rem;
+  margin: 0 0 4px;
+}
+
+.manager-page-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.3px;
+}
+
+.manager-page-header .primary {
+  min-height: 42px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.manager-page-header .primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.manager-refresh {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.manager-refresh:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.manager-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.manager-section {
+  margin-bottom: 28px;
+}
+
+.manager-section h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: #111827;
+}
+
+.manager-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.manager-table th,
+.manager-table td {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.manager-table th {
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.manager-table tr:last-child td {
+  border-bottom: none;
+}
+
+.manager-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-table td:nth-child(2) {
+  text-align: right;
+}
+
+.manager-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -14px;
+  padding: 0 14px 4px;
+}
+
+.manager-table-scroll .manager-table {
+  min-width: 640px;
+}
+
+@media (min-width: 1024px) {
+  .manager-table-scroll {
+    margin: 0;
+    padding: 0 0 4px;
+  }
+}
+
+@media (max-width: 639px) {
+  .manager-table th,
+  .manager-table td {
+    padding: 9px 10px;
+    font-size: 0.86rem;
+  }
+}
+
+.manager-row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.manager-row-actions button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.manager-row-actions button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.manager-row-actions button.danger {
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.manager-user-pill,
+.manager-stock-pill,
+.manager-soldout-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.manager-user-pill.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.manager-user-pill.inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Add/edit forms share one layout across manager sections. */
+
+.manager-cat-form,
+.manager-prod-form,
+.manager-user-form,
+.manager-stock-addform,
+.manager-settings-form {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.manager-cat-form label,
+.manager-prod-form label,
+.manager-user-form label,
+.manager-stock-addform label,
+.manager-settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.manager-cat-form input,
+.manager-cat-form select,
+.manager-prod-form input,
+.manager-prod-form select,
+.manager-user-form input,
+.manager-user-form select,
+.manager-stock-addform input,
+.manager-stock-addform select,
+.manager-settings-form input,
+.manager-settings-form select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.manager-cat-form .actions,
+.manager-prod-form .actions,
+.manager-user-form .actions,
+.manager-stock-addform .actions,
+.manager-settings-form .actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.manager-cat-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.manager-cat-form button,
+.manager-prod-form button,
+.manager-user-form button,
+.manager-stock-addform button,
+.manager-settings-form button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.manager-cat-form button.primary,
+.manager-prod-form button.primary,
+.manager-user-form button.primary,
+.manager-stock-addform button.primary,
+.manager-settings-form button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.manager-cat-form button:disabled,
+.manager-prod-form button:disabled,
+.manager-user-form button:disabled,
+.manager-stock-addform button:disabled,
+.manager-settings-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.manager-settings-form label.manager-radio {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.manager-settings-form label.manager-radio input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+  padding: 0;
+  border: 0;
+}
+
+@media (max-width: 639px) {
+  .manager-cat-form label,
+  .manager-prod-form label,
+  .manager-user-form label,
+  .manager-stock-addform label,
+  .manager-settings-form label {
+    flex: 1 1 100%;
+  }
+
+  .manager-cat-form .actions,
+  .manager-prod-form .actions,
+  .manager-user-form .actions,
+  .manager-stock-addform .actions,
+  .manager-settings-form .actions {
+    width: 100%;
+  }
+
+  .manager-cat-form .actions button,
+  .manager-prod-form .actions button,
+  .manager-user-form .actions button,
+  .manager-stock-addform .actions button,
+  .manager-settings-form .actions button {
+    flex: 1;
+  }
 }
